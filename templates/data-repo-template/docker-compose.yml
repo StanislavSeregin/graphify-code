@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  api:
+    image: graphifycode/api:latest
+    ports:
+      - "5000:8080"
+    volumes:
+      - ./graph-data:/app/graph-data:ro
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - GraphData__Path=/app/graph-data
+
+  frontend:
+    image: graphifycode/frontend:latest
+    ports:
+      - "4200:80"
+    environment:
+      - API_URL=http://localhost:5000
+    depends_on:
+      - api
