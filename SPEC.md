@@ -61,8 +61,10 @@ type ServiceRelations = {
 
 ```
 /graph-data/
-  /service-name/
+  /{service-id}/           # Directory named by service GUID
     index.json      # ServiceNode directly
     endpoints.json  # ServiceEndpoints
     relations.json  # ServiceRelations
 ```
+
+**Note:** Service directories are named using the service's unique GUID identifier, not the service name. This ensures uniqueness and avoids conflicts with special characters or duplicate names.
