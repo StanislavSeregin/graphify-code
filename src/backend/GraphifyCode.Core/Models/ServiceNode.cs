@@ -10,7 +10,5 @@ public class ServiceNode
 
     public required string Description { get; set; }
 
-    public required ServiceRelation[] Relations { get; set; }
-
     public required AnalysisMetadata Metadata { get; set; }
 }
