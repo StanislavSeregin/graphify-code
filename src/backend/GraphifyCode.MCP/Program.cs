@@ -3,12 +3,15 @@ using GraphifyCode.Core.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
 using System.Threading.Tasks;
 
 namespace GraphifyCode.MCP;
 
 public class Program
 {
+    private const string PATH_ENV_KEY = "GRAPHIFY_CODE_DATA_PATH";
+
     static Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -16,8 +19,8 @@ public class Program
         builder.Services
             .Configure<GraphifyCodeSettings>(options =>
             {
-                options.GraphifyCodeDataPath = System.Environment.GetEnvironmentVariable("GRAPHIFY_CODE_DATA_PATH")
-                    ?? throw new System.InvalidOperationException("GRAPHIFY_CODE_DATA_PATH environment variable is required");
+                options.GraphifyCodeDataPath = GetDataPath();
+                Console.WriteLine($"Selected path is {options.GraphifyCodeDataPath}");
             })
             .AddSingleton<GraphifyCodeDataService>()
             .AddMcpServer()
@@ -26,5 +29,12 @@ public class Program
 
         var app = builder.Build();
         return app.RunAsync();
+    }
+
+    private static string GetDataPath()
+    {
+        return Environment.GetEnvironmentVariable(PATH_ENV_KEY)
+            ?? Environment.ProcessPath
+            ?? throw new InvalidOperationException($"Data path not specified, set {PATH_ENV_KEY}");
     }
 }

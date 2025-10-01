@@ -40,6 +40,52 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
         }
     }
 
+    [McpServerTool, Description("""
+        Get all endpoints for a specific service.
+        Returns detailed information about service entry points including their type (http/queue/job), description, and metadata.
+        """)]
+    public string GetServiceEndpoints(
+        [Description("Service ID as GUID string")] string serviceId)
+    {
+        if (!Guid.TryParse(serviceId, out var parsedServiceId))
+        {
+            return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
+        }
+
+        try
+        {
+            var endpoints = graphifyCodeDataService.GetServiceEndpoints(parsedServiceId);
+            return JsonSerializer.Serialize(endpoints, _jsonSerializerOptions);
+        }
+        catch (Exception ex)
+        {
+            return $"Error reading service endpoints: {ex.Message}";
+        }
+    }
+
+    [McpServerTool, Description("""
+        Get all relations for a specific service.
+        Returns information about connections between services, showing which endpoints this service calls.
+        """)]
+    public string GetServiceRelations(
+        [Description("Service ID as GUID string")] string serviceId)
+    {
+        if (!Guid.TryParse(serviceId, out var parsedServiceId))
+        {
+            return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
+        }
+
+        try
+        {
+            var relations = graphifyCodeDataService.GetServiceRelations(parsedServiceId);
+            return JsonSerializer.Serialize(relations, _jsonSerializerOptions);
+        }
+        catch (Exception ex)
+        {
+            return $"Error reading service relations: {ex.Message}";
+        }
+    }
+
     private ServiceOverviewInfo GetServiceOverviewInfo(ServiceNode service)
     {
         var endpoints = graphifyCodeDataService.GetServiceEndpoints(service.Id);
