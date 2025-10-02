@@ -1,57 +1,31 @@
 # GraphifyCode MCP Server Setup for Claude Code
 
-## Step 1: Build the Project
+## Prerequisites
 
-Build the GraphifyCode.MCP project:
+- .NET 9 SDK installed on your system
 
-```bash
-cd src/backend/GraphifyCode.MCP
-dotnet build --configuration Release
-```
-
-## Step 2: Set Environment Variable
-
-Set the `GRAPHIFY_CODE_DATA_PATH` environment variable pointing to your graph data directory:
-
-**Windows (PowerShell):**
-```powershell
-$env:GRAPHIFY_CODE_DATA_PATH = "C:\path\to\your\graph-data"
-```
-
-**Linux/macOS:**
-```bash
-export GRAPHIFY_CODE_DATA_PATH="/path/to/your/graph-data"
-```
-
-## Step 3: Add MCP Server to Claude Code
+## Step 1: Add MCP Server to Claude Code
 
 Open the Claude Code configuration file:
 
-**Windows:**
 ```
-%USERPROFILE%\.claude-code\config.json
-```
-
-**Linux/macOS:**
-```
-~/.claude-code/config.json
+~/.claude.json
 ```
 
 Add the following configuration to the `mcpServers` section:
 
 ```json
-{
-  "mcpServers": {
-    "graphify-code": {
-      "command": "dotnet",
-      "args": [
-        "run",
-        "--project",
-        "/absolute/path/to/graphify-code/src/backend/GraphifyCode.MCP/GraphifyCode.MCP.csproj"
-      ],
-      "env": {
-        "GRAPHIFY_CODE_DATA_PATH": "/absolute/path/to/graph-data"
-      }
+"mcpServers": {
+  "graphify-code": {
+    "type": "stdio",
+    "command": "dotnet",
+    "args": [
+      "run",
+      "--project",
+      "/absolute/path/to/graphify-code/src/backend/GraphifyCode.MCP/GraphifyCode.MCP.csproj"
+    ],
+    "env": {
+      "GRAPHIFY_CODE_DATA_PATH": "/absolute/path/to/graph-data"
     }
   }
 }
@@ -59,7 +33,7 @@ Add the following configuration to the `mcpServers` section:
 
 **Important:** Replace paths with absolute paths on your system.
 
-## Step 4: Restart Claude Code
+## Step 2: Restart Claude Code
 
 Restart Claude Code for the changes to take effect.
 
