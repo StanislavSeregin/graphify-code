@@ -17,7 +17,7 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
     [McpServerTool, Description("""
         Get overview of all services in the codebase.
-        Returns basic information about each service including name, description, and last analysis timestamp.
+        Returns JSON array with service metadata: ID, name, description, last analysis timestamp, code path, and availability of endpoints/relations.
         """)]
     public async Task<string> GetServicesOverview()
     {
@@ -60,7 +60,7 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
     [McpServerTool, Description("""
         Get all endpoints for a specific service.
-        Returns detailed information about service entry points including their type (http/queue/job), description, and metadata.
+        Returns JSON array with endpoint details: ID, name, description, type (http/queue/job), code path, and metadata.
         """)]
     public async Task<string> GetServiceEndpoints(
         [Description("Service ID as GUID string")] string serviceId)
@@ -82,8 +82,8 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
     }
 
     [McpServerTool, Description("""
-        Get all relations for a specific service.
-        Returns information about connections between services, showing which endpoints this service calls.
+        Get all outgoing relations for a specific service.
+        Returns JSON array showing which external endpoints this service calls (dependencies).
         """)]
     public async Task<string> GetServiceRelations(
         [Description("Service ID as GUID string")] string serviceId)
@@ -105,16 +105,16 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
     }
 
     [McpServerTool, Description("""
-        Create a new service or update an existing one.
-        If serviceId is not provided, creates a new service with a generated ID.
-        If serviceId is provided, updates the existing service.
-        Returns the service ID (newly created or updated).
+        Create or update a service.
+        Always provide codePath for internal services to enable proper classification.
+        If serviceId provided, updates existing; otherwise creates new with generated ID.
+        Returns the service ID as JSON.
         """)]
     public async Task<string> CreateOrUpdateService(
         [Description("Service name")] string name,
         [Description("Service description")] string description,
         [Description("Service ID as GUID string (optional, for updates)")] string? serviceId = null,
-        [Description("Relative path to service code (optional, null for external services)")] string? codePath = null)
+        [Description("Relative path to service code (e.g., 'src/Services/UserService'). REQUIRED for internal services (identifies source code location). Omit or set null for external services only.")] string? codePath = null)
     {
         Guid? parsedServiceId = null;
         if (!string.IsNullOrWhiteSpace(serviceId))
@@ -138,10 +138,11 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
     }
 
     [McpServerTool, Description("""
-        Create a new endpoint or update an existing one for a service.
-        If endpointId is not provided, creates a new endpoint with a generated ID.
-        If endpointId is provided, updates the existing endpoint.
-        Returns the endpoint ID (newly created or updated).
+        Create or update a service endpoint.
+        Always provide codePath for internal endpoints to enable proper classification.
+        Type must be: http, queue, or job (error if invalid).
+        If endpointId provided, updates existing; otherwise creates new with generated ID.
+        Returns the endpoint ID as JSON.
         """)]
     public async Task<string> CreateOrUpdateServiceEndpoint(
         [Description("Service ID as GUID string")] string serviceId,
@@ -149,7 +150,7 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
         [Description("Endpoint description")] string description,
         [Description("Endpoint type (http, queue, or job)")] string type,
         [Description("Endpoint ID as GUID string (optional, for updates)")] string? endpointId = null,
-        [Description("Relative path to endpoint code (optional)")] string? codePath = null)
+        [Description("Relative path to endpoint implementation (e.g., 'src/Services/UserService/Controllers/UserController.cs:42'). REQUIRED for internal endpoints (identifies source code location). Omit or set null for external endpoints only.")] string? codePath = null)
     {
         if (!Guid.TryParse(serviceId, out var parsedServiceId))
         {
@@ -179,7 +180,7 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
     [McpServerTool, Description("""
         Add a relation between a source service and a target endpoint.
-        Creates a connection showing that the source service calls the target endpoint.
+        If the relation already exists, no changes are made.
         """)]
     public async Task<string> AddServiceRelation(
         [Description("Source service ID as GUID string")] string sourceServiceId,

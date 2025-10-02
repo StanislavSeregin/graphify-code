@@ -10,6 +10,6 @@ public static class EndpointTypes
 
     public static bool IsValidEndpointType(string type)
     {
-        return type == EndpointTypes.Http || type == EndpointTypes.Queue || type == EndpointTypes.Job;
+        return type == Http || type == Queue || type == Job;
     }
 }
