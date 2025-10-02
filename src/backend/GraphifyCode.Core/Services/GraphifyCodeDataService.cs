@@ -19,7 +19,11 @@ public class GraphifyCodeDataService(IOptions<GraphifyCodeSettings> options)
 
     private const string RELATIONS_FILE_NAME = "relations.json";
 
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private readonly GraphifyCodeSettings _settings = options.Value;
 
