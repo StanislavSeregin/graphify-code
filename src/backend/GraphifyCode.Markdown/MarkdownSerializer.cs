@@ -13,9 +13,9 @@ public static partial class MarkdownSerializer
     /// <typeparam name="T">The type of object to serialize. Must be marked with [MarkdownSerializable].</typeparam>
     /// <param name="obj">The object to serialize.</param>
     /// <returns>Markdown representation of the object.</returns>
-    public static string Serialize<T>(T obj) where T : class
+    public static string Serialize<T>(T obj) where T : class, IMarkdownSerializable
     {
-        throw new NotImplementedException();
+        return obj.ToMarkdown();
     }
 
     /// <summary>
