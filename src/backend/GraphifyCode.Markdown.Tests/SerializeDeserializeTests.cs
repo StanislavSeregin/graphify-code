@@ -77,6 +77,31 @@ public class SerializeDeserializeTests
         - c97aa83a-8947-49d9-b1a3-d61bc47e361e
         """;
 
+    private static readonly ObjWithNested ObjWithNestedData = new()
+    {
+        Id = 1,
+        Name = "Parent",
+        IsSomeFlag = true,
+        Nested = new CustomObj
+        {
+            Id = 2,
+            Name = "Child",
+            IsSomeFlag = false
+        }
+    };
+
+    private const string ObjWithNestedMarkdown = """
+        # ObjWithNested
+        - Id: 1
+        - Name: Parent
+        - IsSomeFlag: True
+
+        ## Nested
+        - Id: 2
+        - Name: Child
+        - IsSomeFlag: False
+        """;
+
     [Test]
     public void Serialize_CustomObj_MarkdownShouldBeExpected()
     {
@@ -136,6 +161,26 @@ public class SerializeDeserializeTests
         // Assert
         obj.Should().BeEquivalentTo(ArraysOfPrimitivesData);
     }
+
+    [Test]
+    public void Serialize_ObjWithNested_MarkdownShouldBeExpected()
+    {
+        // Act
+        var markdown = MarkdownSerializer.Serialize(ObjWithNestedData);
+
+        // Assert
+        markdown.Should().Be(ObjWithNestedMarkdown);
+    }
+
+    [Test]
+    public void Deserialize_ObjWithNested_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = MarkdownSerializer.Deserialize<ObjWithNested>(ObjWithNestedMarkdown);
+
+        // Assert
+        obj.Should().BeEquivalentTo(ObjWithNestedData);
+    }
 }
 
 [MarkdownSerializable]
@@ -162,4 +207,16 @@ public partial class ArraysOfPrimitives
     public required int[] Indexes { get; set; }
 
     public required Guid[] Ids { get; set; }
+}
+
+[MarkdownSerializable]
+public partial class ObjWithNested
+{
+    public int Id { get; set; }
+
+    public required string Name { get; set; }
+
+    public bool IsSomeFlag { get; set; }
+
+    public required CustomObj Nested { get; set; }
 }

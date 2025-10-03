@@ -130,12 +130,25 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             }
             else
             {
-                // Simple property
-                if (firstProperty)
+                if (isPrimitive)
                 {
+                    // Primitive property
+                    if (firstProperty)
+                    {
+                        firstProperty = false;
+                    }
+                    sb.AppendLine($"            sb.AppendLine($\"- {property.Name}: {{{property.Name}}}\");");
+                }
+                else
+                {
+                    // Nested object
+                    sb.AppendLine("            sb.AppendLine();");
+                    sb.AppendLine($"            sb.AppendLine(\"## {property.Name}\");");
+                    sb.AppendLine($"            var nested{property.Name}Lines = {property.Name}.ToMarkdown().Split(new[] {{ '\\r', '\\n' }}, System.StringSplitOptions.RemoveEmptyEntries);");
+                    sb.AppendLine($"            for (int i = 1; i < nested{property.Name}Lines.Length; i++)"); // Skip header
+                    sb.AppendLine($"                sb.AppendLine(nested{property.Name}Lines[i]);");
                     firstProperty = false;
                 }
-                sb.AppendLine($"            sb.AppendLine($\"- {property.Name}: {{{property.Name}}}\");");
             }
         }
 
@@ -156,16 +169,16 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         sb.AppendLine("                index++;");
         sb.AppendLine();
 
-        // Parse simple properties first
-        var simpleProperties = properties.Where(p => p.Type is not IArrayTypeSymbol).ToList();
-        if (simpleProperties.Any())
+        // Parse primitive properties first
+        var primitiveProperties = properties.Where(p => p.Type is not IArrayTypeSymbol && IsPrimitiveOrString(p.Type)).ToList();
+        if (primitiveProperties.Any())
         {
-            sb.AppendLine("            // Parse simple properties");
+            sb.AppendLine("            // Parse primitive properties");
             sb.AppendLine("            while (index < lines.Length && lines[index].StartsWith(\"- \"))");
             sb.AppendLine("            {");
             sb.AppendLine("                var line = lines[index];");
 
-            foreach (var property in simpleProperties)
+            foreach (var property in primitiveProperties)
             {
                 sb.AppendLine($"                if (line.StartsWith(\"- {property.Name}: \"))");
                 sb.AppendLine("                {");
@@ -175,6 +188,26 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             }
 
             sb.AppendLine("                index++;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
+
+        // Parse nested objects
+        var nestedObjectProperties = properties.Where(p => p.Type is not IArrayTypeSymbol && !IsPrimitiveOrString(p.Type)).ToList();
+        foreach (var property in nestedObjectProperties)
+        {
+            sb.AppendLine($"            // Parse {property.Name}");
+            sb.AppendLine($"            if (index < lines.Length && lines[index] == \"## {property.Name}\")");
+            sb.AppendLine("            {");
+            sb.AppendLine("                index++;");
+            sb.AppendLine($"                var nestedLines = new System.Text.StringBuilder();");
+            sb.AppendLine($"                nestedLines.AppendLine(\"# {property.Type.Name}\");");
+            sb.AppendLine("                while (index < lines.Length && lines[index].StartsWith(\"- \"))");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    nestedLines.AppendLine(lines[index]);");
+            sb.AppendLine("                    index++;");
+            sb.AppendLine("                }");
+            sb.AppendLine($"                obj.{property.Name} = {property.Type.ToDisplayString()}.FromMarkdown(nestedLines.ToString());");
             sb.AppendLine("            }");
             sb.AppendLine();
         }
