@@ -13,7 +13,7 @@ public static partial class MarkdownSerializer
     /// <typeparam name="T">The type of object to serialize. Must be marked with [MarkdownSerializable].</typeparam>
     /// <param name="obj">The object to serialize.</param>
     /// <returns>Markdown representation of the object.</returns>
-    public static string Serialize<T>(T obj) where T : class, IMarkdownSerializable
+    public static string Serialize<T>(T obj) where T : class, IMarkdownSerializable<T>
     {
         return obj.ToMarkdown();
     }
@@ -24,8 +24,8 @@ public static partial class MarkdownSerializer
     /// <typeparam name="T">The type of object to deserialize. Must be marked with [MarkdownSerializable].</typeparam>
     /// <param name="markdown">The Markdown string to deserialize.</param>
     /// <returns>The deserialized object.</returns>
-    public static T Deserialize<T>(string markdown) where T : class, new()
+    public static T Deserialize<T>(string markdown) where T : class, IMarkdownSerializable<T>
     {
-        throw new NotImplementedException();
+        return T.FromMarkdown(markdown);
     }
 }

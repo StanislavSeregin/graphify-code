@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -40,11 +41,11 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
 
     private static void Execute(SourceProductionContext context, INamedTypeSymbol typeSymbol)
     {
-        var source = GenerateSerializationCode(typeSymbol);
+        var source = GenerateCode(typeSymbol);
         context.AddSource($"{typeSymbol.Name}.g.cs", SourceText.From(source, Encoding.UTF8));
     }
 
-    private static string GenerateSerializationCode(INamedTypeSymbol typeSymbol)
+    private static string GenerateCode(INamedTypeSymbol typeSymbol)
     {
         var namespaceName = typeSymbol.ContainingNamespace.ToDisplayString();
         var typeName = typeSymbol.Name;
@@ -59,8 +60,36 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"namespace {namespaceName}");
         sb.AppendLine("{");
-        sb.AppendLine($"    partial class {typeName} : GraphifyCode.Markdown.IMarkdownSerializable");
+        sb.AppendLine($"    partial class {typeName} : GraphifyCode.Markdown.IMarkdownSerializable<{typeName}>");
         sb.AppendLine("    {");
+
+        // Generate private constructor for deserialization
+        GenerateDeserializationConstructor(sb, typeName);
+
+        sb.AppendLine();
+
+        // Generate ToMarkdown method
+        GenerateToMarkdownMethod(sb, typeName, properties);
+
+        sb.AppendLine();
+
+        // Generate FromMarkdown method
+        GenerateFromMarkdownMethod(sb, typeName, properties);
+
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static void GenerateDeserializationConstructor(StringBuilder sb, string typeName)
+    {
+        sb.AppendLine($"        [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
+        sb.AppendLine($"        public {typeName}() {{ }}");
+    }
+
+    private static void GenerateToMarkdownMethod(StringBuilder sb, string typeName, List<IPropertySymbol> properties)
+    {
         sb.AppendLine($"        public string ToMarkdown()");
         sb.AppendLine("        {");
         sb.AppendLine("            var sb = new System.Text.StringBuilder();");
@@ -112,10 +141,125 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
 
         sb.AppendLine("            return sb.ToString().TrimEnd();");
         sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
+    }
 
-        return sb.ToString();
+    private static void GenerateFromMarkdownMethod(StringBuilder sb, string typeName, List<IPropertySymbol> properties)
+    {
+        sb.AppendLine($"        public static {typeName} FromMarkdown(string markdown)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var lines = markdown.Split(new[] { '\\r', '\\n' }, System.StringSplitOptions.RemoveEmptyEntries);");
+        sb.AppendLine("            var index = 0;");
+        sb.AppendLine($"            var obj = new {typeName}();");
+        sb.AppendLine();
+        sb.AppendLine("            // Skip header");
+        sb.AppendLine($"            if (index < lines.Length && lines[index].StartsWith(\"# {typeName}\"))");
+        sb.AppendLine("                index++;");
+        sb.AppendLine();
+
+        // Parse simple properties first
+        var simpleProperties = properties.Where(p => p.Type is not IArrayTypeSymbol).ToList();
+        if (simpleProperties.Any())
+        {
+            sb.AppendLine("            // Parse simple properties");
+            sb.AppendLine("            while (index < lines.Length && lines[index].StartsWith(\"- \"))");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var line = lines[index];");
+
+            foreach (var property in simpleProperties)
+            {
+                sb.AppendLine($"                if (line.StartsWith(\"- {property.Name}: \"))");
+                sb.AppendLine("                {");
+                sb.AppendLine($"                    var value = line.Substring({2 + property.Name.Length + 2});");
+                sb.AppendLine($"                    obj.{property.Name} = {GetParseExpression(property.Type, "value")};");
+                sb.AppendLine("                }");
+            }
+
+            sb.AppendLine("                index++;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
+
+        // Parse arrays
+        foreach (var property in properties)
+        {
+            var propertyType = property.Type;
+            var isArray = propertyType is IArrayTypeSymbol;
+
+            if (!isArray)
+                continue;
+
+            var elementType = ((IArrayTypeSymbol)propertyType).ElementType;
+            var isPrimitive = IsPrimitiveOrString(elementType);
+
+            if (isArray)
+            {
+                if (isPrimitive)
+                {
+                    // Array of primitives
+                    sb.AppendLine($"            // Parse {property.Name}");
+                    sb.AppendLine($"            if (index < lines.Length && lines[index] == \"## {property.Name}\")");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                index++;");
+                    sb.AppendLine($"                var {property.Name.ToLowerInvariant()}List = new System.Collections.Generic.List<{elementType.ToDisplayString()}>();");
+                    sb.AppendLine($"                while (index < lines.Length && lines[index].StartsWith(\"- \"))");
+                    sb.AppendLine("                {");
+                    sb.AppendLine($"                    var value = lines[index].Substring(2);");
+                    sb.AppendLine($"                    {property.Name.ToLowerInvariant()}List.Add({GetParseExpression(elementType, "value")});");
+                    sb.AppendLine("                    index++;");
+                    sb.AppendLine("                }");
+                    sb.AppendLine($"                obj.{property.Name} = {property.Name.ToLowerInvariant()}List.ToArray();");
+                    sb.AppendLine("            }");
+                    sb.AppendLine();
+                }
+                else
+                {
+                    // Array of complex objects
+                    sb.AppendLine($"            // Parse {property.Name}");
+                    sb.AppendLine($"            var {property.Name.ToLowerInvariant()}List = new System.Collections.Generic.List<{elementType.ToDisplayString()}>();");
+                    sb.AppendLine($"            while (index < lines.Length && lines[index].StartsWith(\"## {elementType.Name}\"))");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                var itemStart = index;");
+                    sb.AppendLine("                index++;");
+                    sb.AppendLine("                while (index < lines.Length && lines[index].StartsWith(\"- \"))");
+                    sb.AppendLine("                    index++;");
+                    sb.AppendLine();
+                    sb.AppendLine("                var itemLines = new System.Collections.Generic.List<string> { lines[itemStart] };");
+                    sb.AppendLine("                for (int i = itemStart + 1; i < index; i++)");
+                    sb.AppendLine("                    itemLines.Add(lines[i]);");
+                    sb.AppendLine();
+                    sb.AppendLine($"                var itemMarkdown = string.Join(\"\\n\", itemLines).Replace(\"## {elementType.Name}\", \"# {elementType.Name}\");");
+                    sb.AppendLine($"                {property.Name.ToLowerInvariant()}List.Add({elementType.ToDisplayString()}.FromMarkdown(itemMarkdown));");
+                    sb.AppendLine("            }");
+                    sb.AppendLine($"            obj.{property.Name} = {property.Name.ToLowerInvariant()}List.ToArray();");
+                    sb.AppendLine();
+                }
+            }
+        }
+
+        sb.AppendLine("            return obj;");
+        sb.AppendLine("        }");
+    }
+
+    private static string GetParseExpression(ITypeSymbol type, string variableName)
+    {
+        return type.SpecialType switch
+        {
+            SpecialType.System_Boolean => $"bool.Parse({variableName})",
+            SpecialType.System_Byte => $"byte.Parse({variableName})",
+            SpecialType.System_SByte => $"sbyte.Parse({variableName})",
+            SpecialType.System_Int16 => $"short.Parse({variableName})",
+            SpecialType.System_UInt16 => $"ushort.Parse({variableName})",
+            SpecialType.System_Int32 => $"int.Parse({variableName})",
+            SpecialType.System_UInt32 => $"uint.Parse({variableName})",
+            SpecialType.System_Int64 => $"long.Parse({variableName})",
+            SpecialType.System_UInt64 => $"ulong.Parse({variableName})",
+            SpecialType.System_Single => $"float.Parse({variableName})",
+            SpecialType.System_Double => $"double.Parse({variableName})",
+            SpecialType.System_Decimal => $"decimal.Parse({variableName})",
+            SpecialType.System_Char => $"char.Parse({variableName})",
+            SpecialType.System_String => variableName,
+            _ => type.Name == "Guid" ? $"System.Guid.Parse({variableName})" : variableName
+        };
     }
 
     private static bool IsPrimitiveOrString(ITypeSymbol type) => type.SpecialType switch

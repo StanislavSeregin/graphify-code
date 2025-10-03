@@ -7,107 +7,134 @@ namespace GraphifyCode.Markdown.Tests;
 [TestFixture]
 public class SerializeDeserializeTests
 {
+    private static readonly CustomObj CustomObjData = new()
+    {
+        Id = 1,
+        Name = "SomeName",
+        IsSomeFlag = true
+    };
+
+    private const string CustomObjMarkdown = """
+        # CustomObj
+        - Id: 1
+        - Name: SomeName
+        - IsSomeFlag: True
+        """;
+
+    private static readonly ArrayOfCustomObjects ArrayOfCustomObjectsData = new()
+    {
+        Items =
+        [
+            new CustomObj
+            {
+                Id = 1,
+                Name = "SomeName1",
+                IsSomeFlag = true
+            },
+            new CustomObj
+            {
+                Id = 2,
+                Name = "SomeName2",
+                IsSomeFlag = false
+            }
+        ]
+    };
+
+    private const string ArrayOfCustomObjectsMarkdown = """
+        # ArrayOfCustomObjects
+
+        ## CustomObj
+        - Id: 1
+        - Name: SomeName1
+        - IsSomeFlag: True
+
+        ## CustomObj
+        - Id: 2
+        - Name: SomeName2
+        - IsSomeFlag: False
+        """;
+
+    private static readonly ArraysOfPrimitives ArraysOfPrimitivesData = new()
+    {
+        Names = ["A", "B"],
+        Indexes = [1, 2],
+        Ids = [Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"), Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")]
+    };
+
+    private const string ArraysOfPrimitivesMarkdown = """
+        # ArraysOfPrimitives
+
+        ## Names
+        - A
+        - B
+
+        ## Indexes
+        - 1
+        - 2
+
+        ## Ids
+        - 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - c97aa83a-8947-49d9-b1a3-d61bc47e361e
+        """;
+
     [Test]
     public void Serialize_CustomObj_MarkdownShouldBeExpected()
     {
-        // Arrange
-        var data = new CustomObj
-        {
-            Id = 1,
-            Name = "SomeName",
-            IsSomeFlag = true
-        };
-
-
         // Act
-        var markdown = MarkdownSerializer.Serialize(data);
-
+        var markdown = MarkdownSerializer.Serialize(CustomObjData);
 
         // Assert
-        markdown.Should().Be("""
-            # CustomObj
-            - Id: 1
-            - Name: SomeName
-            - IsSomeFlag: True
-            """);
+        markdown.Should().Be(CustomObjMarkdown);
     }
 
     [Test]
     public void Serialize_ArrayOfCustomObjects_MarkdownShouldBeExpected()
     {
-        // Arrange
-        var data = new ArrayOfCustomObjects()
-        {
-            Items =
-            [
-                new CustomObj
-                {
-                    Id = 1,
-                    Name = "SomeName1",
-                    IsSomeFlag = true
-                },
-                new CustomObj
-                {
-                    Id = 2,
-                    Name = "SomeName2",
-                    IsSomeFlag = false
-                }
-            ]
-        };
-
-
         // Act
-        var markdown = MarkdownSerializer.Serialize(data);
-
+        var markdown = MarkdownSerializer.Serialize(ArrayOfCustomObjectsData);
 
         // Assert
-        markdown.Should().Be("""
-            # ArrayOfCustomObjects
-
-            ## CustomObj
-            - Id: 1
-            - Name: SomeName1
-            - IsSomeFlag: True
-
-            ## CustomObj
-            - Id: 2
-            - Name: SomeName2
-            - IsSomeFlag: False
-            """);
+        markdown.Should().Be(ArrayOfCustomObjectsMarkdown);
     }
 
     [Test]
     public void Serialize_ArraysOfPrimitives_MarkdownShouldBeExpected()
     {
-        // Arrange
-        var data = new ArraysOfPrimitives
-        {
-            Names = ["A", "B"],
-            Indexes = [1, 2],
-            Ids = [Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"), Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")]
-        };
-
-
         // Act
-        var markdown = MarkdownSerializer.Serialize(data);
-
+        var markdown = MarkdownSerializer.Serialize(ArraysOfPrimitivesData);
 
         // Assert
-        markdown.Should().Be("""
-            # ArraysOfPrimitives
+        markdown.Should().Be(ArraysOfPrimitivesMarkdown);
+    }
 
-            ## Names
-            - A
-            - B
+    [Test]
+    public void Deserialize_CustomObj_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = MarkdownSerializer.Deserialize<CustomObj>(CustomObjMarkdown);
 
-            ## Indexes
-            - 1
-            - 2
+        // Assert
+        obj.Should().BeEquivalentTo(CustomObjData);
+    }
 
-            ## Ids
-            - 89b71ddd-553a-4861-9383-f9ce24494c3e
-            - c97aa83a-8947-49d9-b1a3-d61bc47e361e
-            """);
+    [Test]
+    public void Deserialize_ArrayOfCustomObjects_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = MarkdownSerializer.Deserialize<ArrayOfCustomObjects>(ArrayOfCustomObjectsMarkdown);
+
+        // Assert
+        obj.Should().BeEquivalentTo(ArrayOfCustomObjectsData);
+    }
+
+    [Test]
+    public void Deserialize_ArraysOfPrimitives_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = MarkdownSerializer.Deserialize<ArraysOfPrimitives>(ArraysOfPrimitivesMarkdown);
+
+        // Assert
+        obj.Should().BeEquivalentTo(ArraysOfPrimitivesData);
     }
 }
 
