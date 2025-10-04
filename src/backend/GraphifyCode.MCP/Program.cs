@@ -1,7 +1,7 @@
 ﻿using GraphifyCode.Core.Settings;
 using GraphifyCode.Data;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ public class Program
 
     static Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = Host.CreateApplicationBuilder(args);
         builder.Logging.AddConsole();
         builder.Services
             .Configure<GraphifyCodeSettings>(options =>
