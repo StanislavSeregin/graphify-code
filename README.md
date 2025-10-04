@@ -1,43 +1,38 @@
 # GraphifyCode
 
-Visualize your codebase as an interactive graph. Map microservices, their entry points, and dependencies to understand and navigate your architecture.
+Microservices documentation through MCP tools. Markdown storage, incremental access, graph visualization.
 
-## Overview
+## What & Why
 
-GraphifyCode helps you:
-- **Visualize microservices** and their purpose
-- **Discover entry points** (HTTP APIs, message queues, background jobs) with descriptions
-- **Map connections** between services and their dependencies
-- **Navigate to code** quickly with direct links to source files
+Documentation for distributed systems needs structure. GraphifyCode enforces schema through MCP tools while keeping data human-readable as Markdown.
 
-## Technology Stack
+Instead of loading entire documentation, query specific pieces: services, endpoints, relations. Update programmatically. Visualize the result as an interactive graph.
 
-- **Backend**: C# (.NET 9)
-- **Data Format**: Markdown (human-readable, version control friendly)
-- **MCP Integration**: Model Context Protocol for AI-assisted graph construction
-- **Frontend**: Angular + TypeScript (planned)
+## Key Features
 
-## Architecture
+- **Incremental queries** - GetServices, GetEndpoints, GetRelations without loading everything
+- **Schema-enforced updates** - CreateOrUpdateService/Endpoint, AddRelation with guaranteed structure
+- **Markdown storage** - Human-readable, version controllable, lives with your code
+- **Graph visualization** - Explore documented architecture visually
+- **Code navigation** - Direct links from documentation to source files
 
-### Core Concepts
+## Core Concepts
 
-- **Services**: Distinct applications, microservices, or external systems
-- **Endpoints**: Entry points to services (HTTP APIs, queue consumers, background jobs)
-- **Relations**: Dependencies between services (service A calls endpoint in service B)
+- **Services**: Applications, microservices, or external systems
+- **Endpoints**: Entry points (HTTP APIs, queue consumers, background jobs)
+- **Relations**: Dependencies between services (service A → endpoint in service B)
 
-### Data Storage
-
-Data is stored in Markdown format for human readability and version control:
+## Data Storage
 
 ```
 /graph-data/
-  /{service-guid}/         # Directory named by service GUID
+  /{service-guid}/
     service.md             # Service metadata
     endpoints.md           # Service endpoints
-    relations.md           # Service relations (target endpoint IDs)
+    relations.md           # Service relations
 ```
 
-Services are identified by GUIDs to ensure uniqueness and avoid naming conflicts.
+Markdown files with guaranteed schema, queryable through MCP tools.
 
 ## MCP Server Setup
 
@@ -77,60 +72,46 @@ Services are identified by GUIDs to ensure uniqueness and avoid naming conflicts
 
 3. Restart Claude Code.
 
-### Available MCP Tools
+### Available Tools
 
-#### Discovery
-- `GetServices` - Get all services with metadata
-- `GetEndpoints` - Get endpoints for a service
-- `GetRelations` - Get dependencies for a service
+**Query:**
+- `GetServices` - All services with metadata
+- `GetEndpoints` - Endpoints for a service
+- `GetRelations` - Dependencies for a service
 
-#### Modification
-- `CreateOrUpdateService` - Create or update a service
-- `CreateOrUpdateEndpoint` - Create or update an endpoint
-- `AddRelation` - Add service dependency
-- `DeleteService` - Delete service (cascading)
-- `DeleteEndpoint` - Delete endpoint (cascading)
-- `DeleteRelation` - Delete specific dependency
+**Modify:**
+- `CreateOrUpdateService` / `CreateOrUpdateEndpoint` - Add or update
+- `AddRelation` - Create dependency
+- `DeleteService` / `DeleteEndpoint` / `DeleteRelation` - Remove (cascading)
 
 ### Usage Examples
 
-Ask Claude Code to:
-
 ```
-Analyze my microservices and create a dependency graph
+Analyze my microservices and document the architecture
 ```
 
 ```
-Show me all services and their endpoints
+What are the dependencies of the User Service?
 ```
 
 ```
-What services depend on the User Service?
-```
-
-```
-Create a new service called "Payment Service" at src/services/payment
+Add a new endpoint "GET /api/users" to the User Service
 ```
 
 ## Development
 
-### Project Structure
-
 ```
 src/backend/
-  GraphifyCode.Core/              # Core models and settings
-  GraphifyCode.Data/              # Data access with Markdown storage
-  GraphifyCode.Markdown/          # Markdown serialization framework
-  GraphifyCode.Markdown.SourceGen/  # Source generator for Markdown serialization
-  GraphifyCode.MCP/               # MCP server implementation
+  GraphifyCode.Core/              # Models, settings
+  GraphifyCode.Data/              # Data access, Markdown storage
+  GraphifyCode.Markdown/          # Serialization framework
+  GraphifyCode.Markdown.SourceGen/  # Source generator
+  GraphifyCode.MCP/               # MCP server
 ```
 
-### Key Features
+**Tech stack:** C# (.NET 9), Markdown serialization with source generators
 
-- **Markdown Serialization**: Custom source generator for human-readable data
-- **Cascading Deletion**: Automatic cleanup of orphaned relations
-- **Idempotent Operations**: Safe to retry operations
-- **AI-First Design**: Rich descriptions for AI understanding
+**Features:** Cascading deletion, idempotent operations, structured schemas
 
 ## License
 
