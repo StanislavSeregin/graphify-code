@@ -1,5 +1,4 @@
 ﻿using GraphifyCode.Data.Entities;
-using GraphifyCode.Data.Models;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,7 +7,7 @@ namespace GraphifyCode.Data;
 
 public interface IDataService
 {
-    Task<Services> GetServices(CancellationToken cancellationToken);
+    Task<Models.Services> GetServices(CancellationToken cancellationToken);
 
     Task<Endpoints> GetEndpoints(Guid serviceId, CancellationToken cancellationToken);
 

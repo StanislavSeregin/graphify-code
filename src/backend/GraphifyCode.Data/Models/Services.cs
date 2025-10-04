@@ -25,5 +25,5 @@ public partial class Service
 
     public DateTime LastAnalyzed { get; set; }
 
-    public string? CodePath { get; set; }
+    public string? RelativeCodePath { get; set; }
 }

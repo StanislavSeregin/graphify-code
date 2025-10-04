@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GraphifyCode.Core\GraphifyCode.Core.csproj" />
+    <ProjectReference Include="..\GraphifyCode.Data\GraphifyCode.Data.csproj" />
   </ItemGroup>
 
 </Project>

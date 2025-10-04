@@ -44,7 +44,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
                             Id = originalService.Id,
                             Name = originalService.Name,
                             Description = originalService.Description,
-                            CodePath = originalService.RelativeCodePath,
+                            RelativeCodePath = originalService.RelativeCodePath,
                             LastAnalyzed = originalService.LastAnalyzedAt,
                             HasEndpoints = File.Exists(Path.Combine(serviceDir, ENDPOINTS_FILE_NAME)),
                             HasRelations = File.Exists(Path.Combine(serviceDir, RELATIONS_FILE_NAME))
@@ -120,15 +120,13 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
             Directory.CreateDirectory(serviceDir);
 
-            var service = new Models.Service
+            var service = new Service
             {
                 Id = id,
                 Name = name,
                 Description = description,
-                HasEndpoints = File.Exists(Path.Combine(serviceDir, ENDPOINTS_FILE_NAME)),
-                HasRelations = File.Exists(Path.Combine(serviceDir, RELATIONS_FILE_NAME)),
-                LastAnalyzed = DateTime.UtcNow,
-                CodePath = codePath
+                LastAnalyzedAt = DateTime.UtcNow,
+                RelativeCodePath = codePath
             };
 
             var serviceMarkdown = service.ToMarkdown();

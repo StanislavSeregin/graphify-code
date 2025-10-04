@@ -1,5 +1,5 @@
-﻿using GraphifyCode.Core.Services;
-using GraphifyCode.Core.Settings;
+﻿using GraphifyCode.Core.Settings;
+using GraphifyCode.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,7 +22,7 @@ public class Program
                 options.GraphifyCodeDataPath = GetDataPath();
                 Console.WriteLine($"Selected path is {options.GraphifyCodeDataPath}");
             })
-            .AddSingleton<GraphifyCodeDataService>()
+            .AddSingleton<IDataService, DataService>()
             .AddMcpServer()
             .WithStdioServerTransport()
             .WithToolsFromAssembly();

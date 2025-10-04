@@ -1,69 +1,47 @@
-﻿using GraphifyCode.Core.Models;
-using GraphifyCode.Core.Services;
+﻿using GraphifyCode.Data;
 using ModelContextProtocol.Server;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
-using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GraphifyCode.MCP;
 
 [McpServerToolType]
-public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
+public class GraphifyCodeTool(IDataService dataService)
 {
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new() { WriteIndented = true };
 
     [McpServerTool, Description("""
-        Get overview of all services in the codebase.
-        Returns JSON array with service metadata: ID, name, description, last analysis timestamp, code path, and availability of endpoints/relations.
+        Get all services in the codebase.
+        Returns Markdown formatted list with service metadata: ID, name, description, last analysis timestamp, relative code path, and flags indicating if service has endpoints or relations.
+        Use this as the starting point to discover what services exist in the system and navigate the architecture.
         """)]
-    public async Task<string> GetServicesOverview()
+    public async Task<string> GetServices(CancellationToken cancellationToken = default)
     {
-        var servicesDict = await graphifyCodeDataService.GetServices();
-        if (servicesDict.Count == 0)
-        {
-            return "No services found.";
-        }
-
         try
         {
-            var endpointsDict = new Dictionary<Guid, ServiceEndpoint[]>();
-            var relationsDict = new Dictionary<Guid, ServiceRelation[]>();
-            foreach (var serviceId in servicesDict.Keys)
+            var services = await dataService.GetServices(cancellationToken);
+            if (services.ServiceList.Length == 0)
             {
-                endpointsDict[serviceId] = await graphifyCodeDataService.GetServiceEndpoints(serviceId);
-                relationsDict[serviceId] = await graphifyCodeDataService.GetServiceRelations(serviceId);
+                return "No services found in the system.";
             }
 
-            var services = servicesDict.Values
-                .Select(service => new ServiceOverviewInfo
-                {
-                    Id = service.Id,
-                    Name = service.Name,
-                    Description = service.Description,
-                    LastAnalyzed = service.Metadata.LastAnalyzedAt,
-                    CodePath = service.Metadata.RelativeCodePath,
-                    HasEndpoints = endpointsDict[service.Id].Length > 0,
-                    HasRelations = relationsDict[service.Id].Length > 0
-                })
-                .ToArray();
-
-            return JsonSerializer.Serialize(services, _jsonSerializerOptions);
+            return services.ToMarkdown();
         }
         catch (Exception ex)
         {
-            return $"Error reading services data: {ex.Message}";
+            return $"Error reading services: {ex.Message}";
         }
     }
 
     [McpServerTool, Description("""
         Get all endpoints for a specific service.
-        Returns JSON array with endpoint details: ID, name, description, type (http/queue/job), code path, and metadata.
+        Returns Markdown formatted list with endpoint details: ID, name, description, type (http/queue/job), last analyzed timestamp, and relative code path.
+        Use this to discover what entry points and interfaces a service exposes - APIs, queue consumers, or background jobs.
         """)]
-    public async Task<string> GetServiceEndpoints(
-        [Description("Service ID as GUID string")] string serviceId)
+    public async Task<string> GetEndpoints(
+        [Description("Service ID as GUID string. Use GetServices to find service IDs.")] string serviceId,
+        CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(serviceId, out var parsedServiceId))
         {
@@ -72,21 +50,29 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            var endpoints = await graphifyCodeDataService.GetServiceEndpoints(parsedServiceId);
-            return JsonSerializer.Serialize(endpoints, _jsonSerializerOptions);
+            var endpoints = await dataService.GetEndpoints(parsedServiceId, cancellationToken);
+            if (endpoints.EndpointList.Length == 0)
+            {
+                return $"No endpoints found for service {serviceId}.";
+            }
+
+            return endpoints.ToMarkdown();
         }
         catch (Exception ex)
         {
-            return $"Error reading service endpoints: {ex.Message}";
+            return $"Error reading endpoints: {ex.Message}";
         }
     }
 
     [McpServerTool, Description("""
         Get all outgoing relations for a specific service.
-        Returns JSON array showing which external endpoints this service calls (dependencies).
+        Returns Markdown formatted list of target endpoint IDs that this service depends on (calls/consumes).
+        Use this to understand service dependencies, integration points, and build the dependency graph.
+        Each relation represents a connection from the source service to a target endpoint in another service.
         """)]
-    public async Task<string> GetServiceRelations(
-        [Description("Service ID as GUID string")] string serviceId)
+    public async Task<string> GetRelations(
+        [Description("Source service ID as GUID string. Use GetServices to find service IDs.")] string serviceId,
+        CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(serviceId, out var parsedServiceId))
         {
@@ -95,26 +81,33 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            var relations = await graphifyCodeDataService.GetServiceRelations(parsedServiceId);
-            return JsonSerializer.Serialize(relations, _jsonSerializerOptions);
+            var relations = await dataService.GetRelations(parsedServiceId, cancellationToken);
+            if (relations.TargetEndpointIds.Length == 0)
+            {
+                return $"No relations found for service {serviceId}.";
+            }
+
+            return relations.ToMarkdown();
         }
         catch (Exception ex)
         {
-            return $"Error reading service relations: {ex.Message}";
+            return $"Error reading relations: {ex.Message}";
         }
     }
 
     [McpServerTool, Description("""
-        Create or update a service.
-        Always provide codePath for internal services to enable proper classification.
-        If serviceId provided, updates existing; otherwise creates new with generated ID.
-        Returns the service ID as JSON.
+        Create or update a service in the system.
+        Services represent distinct applications, microservices, or external systems in your architecture.
+        Always provide relativeCodePath for internal services to enable proper classification and code navigation.
+        If serviceId is provided, updates the existing service; otherwise creates a new service with a generated ID.
+        Returns the service ID (new or existing) for use in subsequent operations like creating endpoints or relations.
         """)]
     public async Task<string> CreateOrUpdateService(
-        [Description("Service name")] string name,
-        [Description("Service description")] string description,
-        [Description("Service ID as GUID string (optional, for updates)")] string? serviceId = null,
-        [Description("Relative path to service code (e.g., 'src/Services/UserService'). REQUIRED for internal services (identifies source code location). Omit or set null for external services only.")] string? codePath = null)
+        [Description("Human-readable service name (e.g., 'User Service', 'Payment Gateway', 'External Email API')")] string name,
+        [Description("Detailed service description explaining its purpose and responsibilities in the system")] string description,
+        [Description("Service ID as GUID string (optional). Provide only when updating an existing service. Omit to create a new service.")] string? serviceId = null,
+        [Description("Relative path to service root directory (e.g., 'src/Services/UserService', 'backend/PaymentService'). REQUIRED for internal services to identify source code location. Omit or set null ONLY for external/third-party services.")] string? relativeCodePath = null,
+        CancellationToken cancellationToken = default)
     {
         Guid? parsedServiceId = null;
         if (!string.IsNullOrWhiteSpace(serviceId))
@@ -128,8 +121,8 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            var id = await graphifyCodeDataService.CreateOrUpdateService(name, description, parsedServiceId, codePath);
-            return JsonSerializer.Serialize(new { ServiceId = id }, _jsonSerializerOptions);
+            var id = await dataService.CreateOrUpdateService(name, description, parsedServiceId, relativeCodePath, cancellationToken);
+            return $"Service {(parsedServiceId.HasValue ? "updated" : "created")} successfully. Service ID: {id}";
         }
         catch (Exception ex)
         {
@@ -138,19 +131,21 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
     }
 
     [McpServerTool, Description("""
-        Create or update a service endpoint.
-        Always provide codePath for internal endpoints to enable proper classification.
-        Type must be: http, queue, or job (error if invalid).
-        If endpointId provided, updates existing; otherwise creates new with generated ID.
-        Returns the endpoint ID as JSON.
+        Create or update an endpoint for a service.
+        Endpoints are entry points to a service - HTTP APIs, message queue consumers, or background jobs.
+        Always provide relativeCodePath for internal endpoints to enable code navigation and proper classification.
+        Type must be exactly one of: 'http' (REST/GraphQL/gRPC), 'queue' (message consumer), or 'job' (scheduled task).
+        If endpointId is provided, updates the existing endpoint; otherwise creates a new endpoint with a generated ID.
+        Returns the endpoint ID (new or existing) for use in relations.
         """)]
-    public async Task<string> CreateOrUpdateServiceEndpoint(
-        [Description("Service ID as GUID string")] string serviceId,
-        [Description("Endpoint name")] string name,
-        [Description("Endpoint description")] string description,
-        [Description("Endpoint type (http, queue, or job)")] string type,
-        [Description("Endpoint ID as GUID string (optional, for updates)")] string? endpointId = null,
-        [Description("Relative path to endpoint implementation (e.g., 'src/Services/UserService/Controllers/UserController.cs:42'). REQUIRED for internal endpoints (identifies source code location). Omit or set null for external endpoints only.")] string? codePath = null)
+    public async Task<string> CreateOrUpdateEndpoint(
+        [Description("Service ID as GUID string (the service that owns this endpoint). Use GetServices to find service IDs.")] string serviceId,
+        [Description("Endpoint name (e.g., 'GET /api/users', 'ProcessOrderQueue', 'DailyReportJob')")] string name,
+        [Description("Detailed endpoint description explaining what it does, what it accepts, and what it returns")] string description,
+        [Description("Endpoint type - must be exactly one of: 'http' (for REST/GraphQL/gRPC APIs), 'queue' (for message queue consumers), 'job' (for scheduled/background tasks)")] string type,
+        [Description("Endpoint ID as GUID string (optional). Provide only when updating an existing endpoint. Omit to create a new endpoint.")] string? endpointId = null,
+        [Description("Relative path to endpoint implementation with optional line number (e.g., 'src/Controllers/UserController.cs:42', 'src/Consumers/OrderConsumer.cs'). REQUIRED for internal endpoints to identify source code location. Omit or set null ONLY for external endpoints.")] string? relativeCodePath = null,
+        CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(serviceId, out var parsedServiceId))
         {
@@ -169,22 +164,26 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            var id = await graphifyCodeDataService.CreateOrUpdateServiceEndpoint(parsedServiceId, name, description, type, parsedEndpointId, codePath);
-            return JsonSerializer.Serialize(new { EndpointId = id }, _jsonSerializerOptions);
+            var id = await dataService.CreateOrUpdateEndpoint(parsedServiceId, name, description, type, parsedEndpointId, relativeCodePath, cancellationToken);
+            return $"Endpoint {(parsedEndpointId.HasValue ? "updated" : "created")} successfully. Endpoint ID: {id}";
         }
         catch (Exception ex)
         {
-            return $"Error creating/updating service endpoint: {ex.Message}";
+            return $"Error creating/updating endpoint: {ex.Message}";
         }
     }
 
     [McpServerTool, Description("""
         Add a relation between a source service and a target endpoint.
-        If the relation already exists, no changes are made.
+        Relations represent dependencies: when service A calls/consumes an endpoint in service B, create a relation from A to B's endpoint.
+        This builds the service dependency graph for visualization and analysis.
+        If the relation already exists, the operation is idempotent (no error, no duplicate).
+        Use this after identifying service integration points in the code to map the actual dependencies.
         """)]
-    public async Task<string> AddServiceRelation(
-        [Description("Source service ID as GUID string")] string sourceServiceId,
-        [Description("Target endpoint ID as GUID string")] string targetEndpointId)
+    public async Task<string> AddRelation(
+        [Description("Source service ID as GUID string (the service that initiates the call/dependency). Use GetServices to find service IDs.")] string sourceServiceId,
+        [Description("Target endpoint ID as GUID string (the endpoint being called/consumed). Use GetEndpoints to find endpoint IDs.")] string targetEndpointId,
+        CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(sourceServiceId, out var parsedSourceServiceId))
         {
@@ -198,21 +197,24 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            await graphifyCodeDataService.AddServiceRelation(parsedSourceServiceId, parsedTargetEndpointId);
-            return "Relation added successfully";
+            await dataService.AddRelation(parsedSourceServiceId, parsedTargetEndpointId, cancellationToken);
+            return $"Relation added successfully: Service {sourceServiceId} → Endpoint {targetEndpointId}";
         }
         catch (Exception ex)
         {
-            return $"Error adding service relation: {ex.Message}";
+            return $"Error adding relation: {ex.Message}";
         }
     }
 
     [McpServerTool, Description("""
-        Delete a service and all its data.
-        Cascading deletion: also removes all relations from other services that reference this service's endpoints.
+        Delete a service and all its associated data permanently.
+        WARNING: This is a destructive operation that cannot be undone.
+        Cascading deletion: automatically removes all endpoints belonging to this service and all relations from other services that reference this service's endpoints.
+        Use this when a service is completely removed from the architecture or was added by mistake.
         """)]
     public async Task<string> DeleteService(
-        [Description("Service ID as GUID string")] string serviceId)
+        [Description("Service ID as GUID string. Use GetServices to find service IDs.")] string serviceId,
+        CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(serviceId, out var parsedServiceId))
         {
@@ -221,8 +223,8 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            await graphifyCodeDataService.DeleteService(parsedServiceId);
-            return "Service deleted successfully";
+            await dataService.DeleteService(parsedServiceId, cancellationToken);
+            return $"Service {serviceId} and all its data deleted successfully (including all endpoints and related relations)";
         }
         catch (Exception ex)
         {
@@ -231,18 +233,16 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
     }
 
     [McpServerTool, Description("""
-        Delete an endpoint from a service.
-        Cascading deletion: also removes all relations that reference this endpoint.
+        Delete an endpoint permanently.
+        WARNING: This is a destructive operation that cannot be undone.
+        Cascading deletion: automatically removes all relations from other services that reference this endpoint.
+        Use this when an endpoint is removed from the codebase or was added by mistake.
+        Note: This operation uses the endpoint's own ID, not the service ID.
         """)]
-    public async Task<string> DeleteServiceEndpoint(
-        [Description("Service ID as GUID string")] string serviceId,
-        [Description("Endpoint ID as GUID string")] string endpointId)
+    public async Task<string> DeleteEndpoint(
+        [Description("Endpoint ID as GUID string. Use GetEndpoints to find endpoint IDs.")] string endpointId,
+        CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(serviceId, out var parsedServiceId))
-        {
-            return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
-        }
-
         if (!Guid.TryParse(endpointId, out var parsedEndpointId))
         {
             return $"Error: Invalid endpoint ID format. Expected GUID, got: {endpointId}";
@@ -250,21 +250,25 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            await graphifyCodeDataService.DeleteServiceEndpoint(parsedServiceId, parsedEndpointId);
-            return "Endpoint deleted successfully";
+            await dataService.DeleteEndpoint(parsedEndpointId, cancellationToken);
+            return $"Endpoint {endpointId} deleted successfully (including all relations that referenced it)";
         }
         catch (Exception ex)
         {
-            return $"Error deleting service endpoint: {ex.Message}";
+            return $"Error deleting endpoint: {ex.Message}";
         }
     }
 
     [McpServerTool, Description("""
         Delete a specific relation between a source service and a target endpoint.
+        Use this to remove a dependency when service A no longer calls/consumes an endpoint in service B.
+        This only removes the relation link, not the service or endpoint themselves.
+        Useful for maintaining accurate dependency graphs as the architecture evolves.
         """)]
-    public async Task<string> DeleteServiceRelation(
-        [Description("Source service ID as GUID string")] string sourceServiceId,
-        [Description("Target endpoint ID as GUID string")] string targetEndpointId)
+    public async Task<string> DeleteRelation(
+        [Description("Source service ID as GUID string (the service that has the dependency). Use GetServices to find service IDs.")] string sourceServiceId,
+        [Description("Target endpoint ID as GUID string (the endpoint no longer being called). Use GetEndpoints to find endpoint IDs.")] string targetEndpointId,
+        CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(sourceServiceId, out var parsedSourceServiceId))
         {
@@ -278,30 +282,12 @@ public class GraphifyCodeTool(GraphifyCodeDataService graphifyCodeDataService)
 
         try
         {
-            await graphifyCodeDataService.DeleteServiceRelation(parsedSourceServiceId, parsedTargetEndpointId);
-            return "Relation deleted successfully";
+            await dataService.DeleteRelation(parsedSourceServiceId, parsedTargetEndpointId, cancellationToken);
+            return $"Relation deleted successfully: Service {sourceServiceId} no longer depends on Endpoint {targetEndpointId}";
         }
         catch (Exception ex)
         {
-            return $"Error deleting service relation: {ex.Message}";
+            return $"Error deleting relation: {ex.Message}";
         }
     }
-
-}
-
-public class ServiceOverviewInfo
-{
-    public Guid Id { get; set; }
-
-    public required string Name { get; set; }
-
-    public required string Description { get; set; }
-
-    public DateTime LastAnalyzed { get; set; }
-
-    public string? CodePath { get; set; }
-
-    public bool HasEndpoints { get; set; }
-
-    public bool HasRelations { get; set; }
 }
