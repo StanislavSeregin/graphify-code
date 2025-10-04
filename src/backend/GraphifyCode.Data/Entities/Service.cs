@@ -1,7 +1,7 @@
 using GraphifyCode.Markdown;
 using System;
 
-namespace GraphifyCode.Data.Models;
+namespace GraphifyCode.Data.Entities;
 
 [MarkdownSerializable]
 public partial class Service
@@ -13,5 +13,7 @@ public partial class Service
 
     public required string Description { get; set; }
 
-    public required AnalysisMetadata Metadata { get; set; }
+    public DateTime LastAnalyzedAt { get; set; }
+
+    public string? RelativeCodePath { get; set; }
 }

@@ -40,7 +40,10 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
     private static void Execute(SourceProductionContext context, INamedTypeSymbol typeSymbol)
     {
         var source = GenerateCode(typeSymbol);
-        context.AddSource($"{typeSymbol.Name}.g.cs", SourceText.From(source, Encoding.UTF8));
+        var fileName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            .Replace("global::", "")
+            .Replace(".", "_");
+        context.AddSource($"{fileName}.g.cs", SourceText.From(source, Encoding.UTF8));
     }
 
     private static string GenerateCode(INamedTypeSymbol typeSymbol)

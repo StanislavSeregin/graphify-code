@@ -1,5 +1,5 @@
 ﻿using FluentAssertions;
-using GraphifyCode.Data.Models;
+using GraphifyCode.Data.Entities;
 using NUnit.Framework;
 using System;
 
@@ -13,19 +13,14 @@ public class SerializeDeserializeTests
         Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
         Name = "UserService",
         Description = "Handles user authentication and management",
-        Metadata = new AnalysisMetadata
-        {
-            LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
-            RelativeCodePath = "src/services/UserService.cs"
-        }
+        LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
+        RelativeCodePath = "src/services/UserService.cs"
     };
 
     private const string ServiceMarkdown = """
         # UserService
         - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Handles user authentication and management
-
-        ## Metadata
         - LastAnalyzedAt: 15.10.2024 14:30:00
         - RelativeCodePath: src/services/UserService.cs
         """;
@@ -60,11 +55,8 @@ public class SerializeDeserializeTests
                 Name = "GetUser",
                 Description = "Retrieves user by ID",
                 Type = "http",
-                Metadata = new AnalysisMetadata
-                {
-                    LastAnalyzedAt = new DateTime(2024, 10, 15, 15, 0, 0),
-                    RelativeCodePath = "src/controllers/UserController.cs"
-                }
+                LastAnalyzedAt = new DateTime(2024, 10, 15, 15, 0, 0),
+                RelativeCodePath = "src/controllers/UserController.cs"
             },
             new Endpoint
             {
@@ -72,11 +64,8 @@ public class SerializeDeserializeTests
                 Name = "CreateUser",
                 Description = "Creates a new user",
                 Type = "http",
-                Metadata = new AnalysisMetadata
-                {
-                    LastAnalyzedAt = new DateTime(2024, 10, 15, 16, 0, 0),
-                    RelativeCodePath = "src/controllers/UserController.cs"
-                }
+                LastAnalyzedAt = new DateTime(2024, 10, 15, 16, 0, 0),
+                RelativeCodePath = "src/controllers/UserController.cs"
             }
         ]
     };
@@ -88,8 +77,6 @@ public class SerializeDeserializeTests
         - Id: c97aa83a-8947-49d9-b1a3-d61bc47e361e
         - Description: Retrieves user by ID
         - Type: http
-
-        ### Metadata
         - LastAnalyzedAt: 15.10.2024 15:00:00
         - RelativeCodePath: src/controllers/UserController.cs
 
@@ -97,8 +84,6 @@ public class SerializeDeserializeTests
         - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Creates a new user
         - Type: http
-
-        ### Metadata
         - LastAnalyzedAt: 15.10.2024 16:00:00
         - RelativeCodePath: src/controllers/UserController.cs
         """;

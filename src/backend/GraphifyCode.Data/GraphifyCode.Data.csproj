@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\GraphifyCode.Core\GraphifyCode.Core.csproj" />
     <ProjectReference Include="..\GraphifyCode.Markdown\GraphifyCode.Markdown.csproj" />
     <ProjectReference Include="..\GraphifyCode.Markdown.SourceGen\GraphifyCode.Markdown.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

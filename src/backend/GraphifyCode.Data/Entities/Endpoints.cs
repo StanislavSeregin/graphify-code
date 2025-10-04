@@ -1,7 +1,7 @@
 using GraphifyCode.Markdown;
 using System;
 
-namespace GraphifyCode.Data.Models;
+namespace GraphifyCode.Data.Entities;
 
 [MarkdownSerializable]
 public partial class Endpoints
@@ -21,7 +21,9 @@ public partial class Endpoint
 
     public required string Type { get; set; }
 
-    public required AnalysisMetadata Metadata { get; set; }
+    public DateTime LastAnalyzedAt { get; set; }
+
+    public string? RelativeCodePath { get; set; }
 }
 
 public static class EndpointTypes
