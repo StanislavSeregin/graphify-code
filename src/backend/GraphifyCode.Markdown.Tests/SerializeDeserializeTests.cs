@@ -29,7 +29,7 @@ public class SerializeDeserializeTests
     public void Serialize_Service_MarkdownShouldBeExpected()
     {
         // Act
-        var markdown = MarkdownSerializer.Serialize(ServiceData);
+        var markdown = ServiceData.ToMarkdown();
 
         // Assert
         markdown.Should().Be(ServiceMarkdown);
@@ -39,7 +39,7 @@ public class SerializeDeserializeTests
     public void Deserialize_Service_ObjectShouldBeExpected()
     {
         // Act
-        var obj = MarkdownSerializer.Deserialize<Service>(ServiceMarkdown);
+        var obj = Service.FromMarkdown(ServiceMarkdown);
 
         // Assert
         obj.Should().BeEquivalentTo(ServiceData);
@@ -92,7 +92,7 @@ public class SerializeDeserializeTests
     public void Serialize_Endpoints_MarkdownShouldBeExpected()
     {
         // Act
-        var markdown = MarkdownSerializer.Serialize(EndpointsData);
+        var markdown = EndpointsData.ToMarkdown();
 
         // Assert
         markdown.Should().Be(EndpointsMarkdown);
@@ -102,7 +102,7 @@ public class SerializeDeserializeTests
     public void Deserialize_Endpoints_ObjectShouldBeExpected()
     {
         // Act
-        var obj = MarkdownSerializer.Deserialize<Endpoints>(EndpointsMarkdown);
+        var obj = Endpoints.FromMarkdown(EndpointsMarkdown);
 
         // Assert
         obj.Should().BeEquivalentTo(EndpointsData);
@@ -129,7 +129,7 @@ public class SerializeDeserializeTests
     public void Serialize_Relations_MarkdownShouldBeExpected()
     {
         // Act
-        var markdown = MarkdownSerializer.Serialize(RelationsData);
+        var markdown = RelationsData.ToMarkdown();
 
         // Assert
         markdown.Should().Be(RelationsMarkdown);
@@ -139,7 +139,7 @@ public class SerializeDeserializeTests
     public void Deserialize_Relations_ObjectShouldBeExpected()
     {
         // Act
-        var obj = MarkdownSerializer.Deserialize<Relations>(RelationsMarkdown);
+        var obj = Relations.FromMarkdown(RelationsMarkdown);
 
         // Assert
         obj.Should().BeEquivalentTo(RelationsData);

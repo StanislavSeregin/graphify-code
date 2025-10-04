@@ -60,7 +60,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
 
         // Exclude header property from normal handlers as it's handled separately
         var propertiesToHandle = headerProperty != null
-            ? properties.Where(p => p != headerProperty).ToList()
+            ? [.. properties.Where(p => !SymbolEqualityComparer.Default.Equals(p, headerProperty))]
             : properties;
 
         var propertyHandlers = propertiesToHandle.Select(p => PropertyHandlerFactory.Create(p)).ToList();
