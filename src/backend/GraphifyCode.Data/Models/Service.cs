@@ -8,6 +8,7 @@ public partial class Service
 {
     public Guid Id { get; set; }
 
+    [MarkdownHeader]
     public required string Name { get; set; }
 
     public required string Description { get; set; }

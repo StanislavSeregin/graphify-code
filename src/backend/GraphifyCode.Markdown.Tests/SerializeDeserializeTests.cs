@@ -21,15 +21,34 @@ public class SerializeDeserializeTests
     };
 
     private const string ServiceMarkdown = """
-        # Service
+        # UserService
         - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
-        - Name: UserService
         - Description: Handles user authentication and management
 
         ## Metadata
         - LastAnalyzedAt: 15.10.2024 14:30:00
         - RelativeCodePath: src/services/UserService.cs
         """;
+
+    [Test]
+    public void Serialize_Service_MarkdownShouldBeExpected()
+    {
+        // Act
+        var markdown = MarkdownSerializer.Serialize(ServiceData);
+
+        // Assert
+        markdown.Should().Be(ServiceMarkdown);
+    }
+
+    [Test]
+    public void Deserialize_Service_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = MarkdownSerializer.Deserialize<Service>(ServiceMarkdown);
+
+        // Assert
+        obj.Should().BeEquivalentTo(ServiceData);
+    }
 
     private static readonly Endpoints EndpointsData = new()
     {
@@ -84,43 +103,6 @@ public class SerializeDeserializeTests
         - RelativeCodePath: src/controllers/UserController.cs
         """;
 
-    private static readonly Relations RelationsData = new()
-    {
-        TargetEndpointIds =
-        [
-            Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
-            Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")
-        ]
-    };
-
-    private const string RelationsMarkdown = """
-        # Relations
-
-        ## TargetEndpointIds
-        - 89b71ddd-553a-4861-9383-f9ce24494c3e
-        - c97aa83a-8947-49d9-b1a3-d61bc47e361e
-        """;
-
-    [Test]
-    public void Serialize_Service_MarkdownShouldBeExpected()
-    {
-        // Act
-        var markdown = MarkdownSerializer.Serialize(ServiceData);
-
-        // Assert
-        markdown.Should().Be(ServiceMarkdown);
-    }
-
-    [Test]
-    public void Deserialize_Service_ObjectShouldBeExpected()
-    {
-        // Act
-        var obj = MarkdownSerializer.Deserialize<Service>(ServiceMarkdown);
-
-        // Assert
-        obj.Should().BeEquivalentTo(ServiceData);
-    }
-
     [Test]
     public void Serialize_Endpoints_MarkdownShouldBeExpected()
     {
@@ -140,6 +122,23 @@ public class SerializeDeserializeTests
         // Assert
         obj.Should().BeEquivalentTo(EndpointsData);
     }
+
+    private static readonly Relations RelationsData = new()
+    {
+        TargetEndpointIds =
+        [
+            Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+            Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")
+        ]
+    };
+
+    private const string RelationsMarkdown = """
+        # Relations
+
+        ## TargetEndpointIds
+        - 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - c97aa83a-8947-49d9-b1a3-d61bc47e361e
+        """;
 
     [Test]
     public void Serialize_Relations_MarkdownShouldBeExpected()

@@ -52,7 +52,15 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             .Where(p => p.DeclaredAccessibility == Accessibility.Public && p.GetMethod is not null)
             .ToList();
 
-        var propertyHandlers = properties.Select(p => PropertyHandlerFactory.Create(p)).ToList();
+        var headerProperty = properties.FirstOrDefault(p => p.GetAttributes()
+            .Any(a => a.AttributeClass?.Name is "MarkdownHeaderAttribute" or "MarkdownHeader"));
+
+        // Exclude header property from normal handlers as it's handled separately
+        var propertiesToHandle = headerProperty != null
+            ? properties.Where(p => p != headerProperty).ToList()
+            : properties;
+
+        var propertyHandlers = propertiesToHandle.Select(p => PropertyHandlerFactory.Create(p)).ToList();
 
         var code = new CodeBuilder();
         code
@@ -64,9 +72,9 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 {
                     GenerateConstructor(cls, typeName);
                     cls.Line();
-                    GenerateToMarkdownMethod(cls, typeName, propertyHandlers);
+                    GenerateToMarkdownMethod(cls, typeName, propertyHandlers, headerProperty);
                     cls.Line();
-                    GenerateFromMarkdownMethod(cls, typeName, propertyHandlers);
+                    GenerateFromMarkdownMethod(cls, typeName, propertyHandlers, headerProperty);
                 })
             );
 
@@ -80,14 +88,24 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             .Line($"public {typeName}() {{ }}");
     }
 
-    private static void GenerateToMarkdownMethod(CodeBuilder code, string typeName, List<PropertyHandler> handlers)
+    private static void GenerateToMarkdownMethod(CodeBuilder code, string typeName, List<PropertyHandler> handlers, IPropertySymbol? headerProperty)
     {
         code.Nest("public string ToMarkdown()", method =>
         {
-            method.Line($$"""
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("# {{typeName}}");
-                """);
+            if (headerProperty != null)
+            {
+                method.Line($$"""
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"# {{{headerProperty.Name}}}");
+                    """);
+            }
+            else
+            {
+                method.Line($$"""
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine("# {{typeName}}");
+                    """);
+            }
 
             bool firstProperty = true;
             foreach (var handler in handlers)
@@ -99,7 +117,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         });
     }
 
-    private static void GenerateFromMarkdownMethod(CodeBuilder code, string typeName, List<PropertyHandler> handlers)
+    private static void GenerateFromMarkdownMethod(CodeBuilder code, string typeName, List<PropertyHandler> handlers, IPropertySymbol? headerProperty)
     {
         code.Nest($"public static {typeName} FromMarkdown(string markdown)", method =>
         {
@@ -108,10 +126,27 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 var index = 0;
                 var obj = new {{typeName}}();
 
-                // Skip header
-                if (index < lines.Length && lines[index].StartsWith("# {{typeName}}"))
-                    index++;
                 """);
+
+            if (headerProperty != null)
+            {
+                method.Line($$"""
+                    // Parse header and extract {{headerProperty.Name}}
+                    if (index < lines.Length && lines[index].StartsWith("# "))
+                    {
+                        obj.{{headerProperty.Name}} = lines[index].Substring(2);
+                        index++;
+                    }
+                    """);
+            }
+            else
+            {
+                method.Line($$"""
+                    // Skip header
+                    if (index < lines.Length && lines[index].StartsWith("# "))
+                        index++;
+                    """);
+            }
 
             // Group handlers by type
             var primitiveHandlers = handlers.Where(h => h is PrimitivePropertyHandler).ToList();
@@ -364,14 +399,19 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     }
 
                     var itemLines = new System.Collections.Generic.List<string>();
-                    itemLines.Add("# {{elementType.Name}}");
                 """);
 
             if (headerProperty != null)
             {
                 code.Line($$"""
                         var headerValue = lines[itemStart].Substring({{currentLevel + 2}});
-                        itemLines.Add($"- {{headerProperty.Name}}: {headerValue}");
+                        itemLines.Add($"# {headerValue}");
+                    """);
+            }
+            else
+            {
+                code.Line($$"""
+                        itemLines.Add("# {{elementType.Name}}");
                     """);
             }
 
