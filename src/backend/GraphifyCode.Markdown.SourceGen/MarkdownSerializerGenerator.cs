@@ -183,7 +183,8 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         public override void GenerateSerializationCode(CodeBuilder code, int currentLevel, ref bool firstProperty)
         {
             firstProperty = false;
-            code.Line($"sb.AppendLine($\"- {Property.Name}: {{{Property.Name}}}\");");
+            var formatExpr = GetFormatExpression(Property.Type, Property.Name);
+            code.Line($"sb.AppendLine($\"- {Property.Name}: {{{formatExpr}}}\");");
         }
 
         public override void GenerateDeserializationCode(CodeBuilder code, int currentLevel)
@@ -206,11 +207,12 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             firstProperty = false;
             var header = GetHeaderPrefix(currentLevel);
+            var formatExpr = GetFormatExpression(elementType, "item");
             code.Line($$"""
                 sb.AppendLine();
                 sb.AppendLine("{{header}} {{Property.Name}}");
                 foreach (var item in {{Property.Name}})
-                    sb.AppendLine($"- {item}");
+                    sb.AppendLine($"- {{{formatExpr}}}");
                 """);
         }
 
@@ -297,6 +299,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             var header = GetHeaderPrefix(currentLevel);
             var listName = $"{Property.Name.ToLowerInvariant()}List";
+            var headerPrefix = new string('#', currentLevel + 1);
 
             code.Line($$"""
                 // Parse {{Property.Name}}
@@ -305,14 +308,37 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 {
                     var itemStart = index;
                     index++;
-                    while (index < lines.Length && lines[index].StartsWith("- "))
+                    while (index < lines.Length && !lines[index].StartsWith("{{header}} "))
+                    {
+                        // Check if we hit a header of same or higher level
+                        if (lines[index].StartsWith("#"))
+                        {
+                            bool isSameOrHigherLevel = true;
+                            for (int h = 0; h < {{currentLevel + 1}}; h++)
+                            {
+                                if (h >= lines[index].Length || lines[index][h] != '#')
+                                {
+                                    isSameOrHigherLevel = false;
+                                    break;
+                                }
+                            }
+                            if (isSameOrHigherLevel && ({{currentLevel + 1}} >= lines[index].Length || lines[index][{{currentLevel + 1}}] != '#'))
+                                break;
+                        }
                         index++;
+                    }
 
-                    var itemLines = new System.Collections.Generic.List<string> { lines[itemStart] };
+                    var itemLines = new System.Collections.Generic.List<string>();
+                    itemLines.Add(lines[itemStart].Replace("{{header}} ", "# "));
                     for (int i = itemStart + 1; i < index; i++)
-                        itemLines.Add(lines[i]);
+                    {
+                        var line = lines[i];
+                        if (line.StartsWith("{{header}}"))
+                            line = line.Substring({{currentLevel}});
+                        itemLines.Add(line);
+                    }
 
-                    var itemMarkdown = string.Join("\n", itemLines).Replace("{{header}} {{elementType.Name}}", "# {{elementType.Name}}");
+                    var itemMarkdown = string.Join("\n", itemLines);
                     {{listName}}.Add({{elementType.ToDisplayString()}}.FromMarkdown(itemMarkdown));
                 }
                 obj.{{Property.Name}} = {{listName}}.ToArray();
@@ -321,6 +347,16 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
     }
 
     // Helper methods
+    private static string GetFormatExpression(ITypeSymbol type, string propertyName)
+    {
+        if (type.SpecialType == SpecialType.System_DateTime ||
+            (type.Name == "DateTime" && type.ContainingNamespace?.ToDisplayString() == "System"))
+        {
+            return $"{propertyName}.ToString(\"dd.MM.yyyy HH:mm:ss\", System.Globalization.CultureInfo.InvariantCulture)";
+        }
+        return propertyName;
+    }
+
     private static string GetParseExpression(ITypeSymbol type, string variableName)
     {
         return type.SpecialType switch
@@ -339,7 +375,13 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             SpecialType.System_Decimal => $"decimal.Parse({variableName})",
             SpecialType.System_Char => $"char.Parse({variableName})",
             SpecialType.System_String => variableName,
-            _ => type.Name == "Guid" ? $"System.Guid.Parse({variableName})" : variableName
+            SpecialType.System_DateTime => $"System.DateTime.ParseExact({variableName}, \"dd.MM.yyyy HH:mm:ss\", System.Globalization.CultureInfo.InvariantCulture)",
+            _ => type.Name switch
+            {
+                "Guid" => $"System.Guid.Parse({variableName})",
+                "DateTime" => $"System.DateTime.ParseExact({variableName}, \"dd.MM.yyyy HH:mm:ss\", System.Globalization.CultureInfo.InvariantCulture)",
+                _ => variableName
+            }
         };
     }
 
@@ -358,7 +400,8 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         SpecialType.System_Double or
         SpecialType.System_Decimal or
         SpecialType.System_Char or
-        SpecialType.System_String => true,
-        _ => type.Name == "Guid" && type.ContainingNamespace?.ToDisplayString() == "System"
+        SpecialType.System_String or
+        SpecialType.System_DateTime => true,
+        _ => (type.Name == "Guid" || type.Name == "DateTime") && type.ContainingNamespace?.ToDisplayString() == "System"
     };
 }

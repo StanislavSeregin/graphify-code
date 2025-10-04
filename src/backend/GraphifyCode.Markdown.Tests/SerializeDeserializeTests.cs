@@ -1,4 +1,5 @@
 ﻿using FluentAssertions;
+using GraphifyCode.Data.Models;
 using NUnit.Framework;
 using System;
 
@@ -7,216 +8,158 @@ namespace GraphifyCode.Markdown.Tests;
 [TestFixture]
 public class SerializeDeserializeTests
 {
-    private static readonly CustomObj CustomObjData = new()
+    private static readonly Service ServiceData = new()
     {
-        Id = 1,
-        Name = "SomeName",
-        IsSomeFlag = true
+        Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+        Name = "UserService",
+        Description = "Handles user authentication and management",
+        Metadata = new AnalysisMetadata
+        {
+            LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
+            RelativeCodePath = "src/services/UserService.cs"
+        }
     };
 
-    private const string CustomObjMarkdown = """
-        # CustomObj
-        - Id: 1
-        - Name: SomeName
-        - IsSomeFlag: True
+    private const string ServiceMarkdown = """
+        # Service
+        - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - Name: UserService
+        - Description: Handles user authentication and management
+
+        ## Metadata
+        - LastAnalyzedAt: 15.10.2024 14:30:00
+        - RelativeCodePath: src/services/UserService.cs
         """;
 
-    private static readonly ArrayOfCustomObjects ArrayOfCustomObjectsData = new()
+    private static readonly Endpoints EndpointsData = new()
     {
-        Items =
+        EndpointList =
         [
-            new CustomObj
+            new Endpoint
             {
-                Id = 1,
-                Name = "SomeName1",
-                IsSomeFlag = true
+                Id = Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e"),
+                Name = "GetUser",
+                Description = "Retrieves user by ID",
+                Type = "http",
+                Metadata = new AnalysisMetadata
+                {
+                    LastAnalyzedAt = new DateTime(2024, 10, 15, 15, 0, 0),
+                    RelativeCodePath = "src/controllers/UserController.cs"
+                }
             },
-            new CustomObj
+            new Endpoint
             {
-                Id = 2,
-                Name = "SomeName2",
-                IsSomeFlag = false
+                Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+                Name = "CreateUser",
+                Description = "Creates a new user",
+                Type = "http",
+                Metadata = new AnalysisMetadata
+                {
+                    LastAnalyzedAt = new DateTime(2024, 10, 15, 16, 0, 0),
+                    RelativeCodePath = "src/controllers/UserController.cs"
+                }
             }
         ]
     };
 
-    private const string ArrayOfCustomObjectsMarkdown = """
-        # ArrayOfCustomObjects
+    private const string EndpointsMarkdown = """
+        # Endpoints
 
-        ## CustomObj
-        - Id: 1
-        - Name: SomeName1
-        - IsSomeFlag: True
+        ## Endpoint
+        - Id: c97aa83a-8947-49d9-b1a3-d61bc47e361e
+        - Name: GetUser
+        - Description: Retrieves user by ID
+        - Type: http
 
-        ## CustomObj
-        - Id: 2
-        - Name: SomeName2
-        - IsSomeFlag: False
+        ### Metadata
+        - LastAnalyzedAt: 15.10.2024 15:00:00
+        - RelativeCodePath: src/controllers/UserController.cs
+
+        ## Endpoint
+        - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - Name: CreateUser
+        - Description: Creates a new user
+        - Type: http
+
+        ### Metadata
+        - LastAnalyzedAt: 15.10.2024 16:00:00
+        - RelativeCodePath: src/controllers/UserController.cs
         """;
 
-    private static readonly ArraysOfPrimitives ArraysOfPrimitivesData = new()
+    private static readonly Relations RelationsData = new()
     {
-        Names = ["A", "B"],
-        Indexes = [1, 2],
-        Ids = [Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"), Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")]
+        TargetEndpointIds =
+        [
+            Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+            Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")
+        ]
     };
 
-    private const string ArraysOfPrimitivesMarkdown = """
-        # ArraysOfPrimitives
+    private const string RelationsMarkdown = """
+        # Relations
 
-        ## Names
-        - A
-        - B
-
-        ## Indexes
-        - 1
-        - 2
-
-        ## Ids
+        ## TargetEndpointIds
         - 89b71ddd-553a-4861-9383-f9ce24494c3e
         - c97aa83a-8947-49d9-b1a3-d61bc47e361e
         """;
 
-    private static readonly ObjWithNested ObjWithNestedData = new()
-    {
-        Id = 1,
-        Name = "Parent",
-        IsSomeFlag = true,
-        Nested = new CustomObj
-        {
-            Id = 2,
-            Name = "Child",
-            IsSomeFlag = false
-        }
-    };
-
-    private const string ObjWithNestedMarkdown = """
-        # ObjWithNested
-        - Id: 1
-        - Name: Parent
-        - IsSomeFlag: True
-
-        ## Nested
-        - Id: 2
-        - Name: Child
-        - IsSomeFlag: False
-        """;
-
     [Test]
-    public void Serialize_CustomObj_MarkdownShouldBeExpected()
+    public void Serialize_Service_MarkdownShouldBeExpected()
     {
         // Act
-        var markdown = MarkdownSerializer.Serialize(CustomObjData);
+        var markdown = MarkdownSerializer.Serialize(ServiceData);
 
         // Assert
-        markdown.Should().Be(CustomObjMarkdown);
+        markdown.Should().Be(ServiceMarkdown);
     }
 
     [Test]
-    public void Serialize_ArrayOfCustomObjects_MarkdownShouldBeExpected()
+    public void Deserialize_Service_ObjectShouldBeExpected()
     {
         // Act
-        var markdown = MarkdownSerializer.Serialize(ArrayOfCustomObjectsData);
+        var obj = MarkdownSerializer.Deserialize<Service>(ServiceMarkdown);
 
         // Assert
-        markdown.Should().Be(ArrayOfCustomObjectsMarkdown);
+        obj.Should().BeEquivalentTo(ServiceData);
     }
 
     [Test]
-    public void Serialize_ArraysOfPrimitives_MarkdownShouldBeExpected()
+    public void Serialize_Endpoints_MarkdownShouldBeExpected()
     {
         // Act
-        var markdown = MarkdownSerializer.Serialize(ArraysOfPrimitivesData);
+        var markdown = MarkdownSerializer.Serialize(EndpointsData);
 
         // Assert
-        markdown.Should().Be(ArraysOfPrimitivesMarkdown);
+        markdown.Should().Be(EndpointsMarkdown);
     }
 
     [Test]
-    public void Deserialize_CustomObj_ObjectShouldBeExpected()
+    public void Deserialize_Endpoints_ObjectShouldBeExpected()
     {
         // Act
-        var obj = MarkdownSerializer.Deserialize<CustomObj>(CustomObjMarkdown);
+        var obj = MarkdownSerializer.Deserialize<Endpoints>(EndpointsMarkdown);
 
         // Assert
-        obj.Should().BeEquivalentTo(CustomObjData);
+        obj.Should().BeEquivalentTo(EndpointsData);
     }
 
     [Test]
-    public void Deserialize_ArrayOfCustomObjects_ObjectShouldBeExpected()
+    public void Serialize_Relations_MarkdownShouldBeExpected()
     {
         // Act
-        var obj = MarkdownSerializer.Deserialize<ArrayOfCustomObjects>(ArrayOfCustomObjectsMarkdown);
+        var markdown = MarkdownSerializer.Serialize(RelationsData);
 
         // Assert
-        obj.Should().BeEquivalentTo(ArrayOfCustomObjectsData);
+        markdown.Should().Be(RelationsMarkdown);
     }
 
     [Test]
-    public void Deserialize_ArraysOfPrimitives_ObjectShouldBeExpected()
+    public void Deserialize_Relations_ObjectShouldBeExpected()
     {
         // Act
-        var obj = MarkdownSerializer.Deserialize<ArraysOfPrimitives>(ArraysOfPrimitivesMarkdown);
+        var obj = MarkdownSerializer.Deserialize<Relations>(RelationsMarkdown);
 
         // Assert
-        obj.Should().BeEquivalentTo(ArraysOfPrimitivesData);
+        obj.Should().BeEquivalentTo(RelationsData);
     }
-
-    [Test]
-    public void Serialize_ObjWithNested_MarkdownShouldBeExpected()
-    {
-        // Act
-        var markdown = MarkdownSerializer.Serialize(ObjWithNestedData);
-
-        // Assert
-        markdown.Should().Be(ObjWithNestedMarkdown);
-    }
-
-    [Test]
-    public void Deserialize_ObjWithNested_ObjectShouldBeExpected()
-    {
-        // Act
-        var obj = MarkdownSerializer.Deserialize<ObjWithNested>(ObjWithNestedMarkdown);
-
-        // Assert
-        obj.Should().BeEquivalentTo(ObjWithNestedData);
-    }
-}
-
-[MarkdownSerializable]
-public partial class CustomObj
-{
-    public int Id { get; set; }
-
-    public required string Name { get; set; }
-
-    public bool IsSomeFlag { get; set; }
-}
-
-[MarkdownSerializable]
-public partial class ArrayOfCustomObjects
-{
-    public required CustomObj[] Items { get; set; }
-}
-
-[MarkdownSerializable]
-public partial class ArraysOfPrimitives
-{
-    public required string[] Names { get; set; }
-
-    public required int[] Indexes { get; set; }
-
-    public required Guid[] Ids { get; set; }
-}
-
-[MarkdownSerializable]
-public partial class ObjWithNested
-{
-    public int Id { get; set; }
-
-    public required string Name { get; set; }
-
-    public bool IsSomeFlag { get; set; }
-
-    public required CustomObj Nested { get; set; }
 }

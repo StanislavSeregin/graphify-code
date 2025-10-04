@@ -23,8 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GraphifyCode.Markdown\GraphifyCode.Markdown.csproj" />
-    <ProjectReference Include="..\GraphifyCode.Markdown.SourceGen\GraphifyCode.Markdown.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GraphifyCode.Data\GraphifyCode.Data.csproj" />
   </ItemGroup>
 
 </Project>
