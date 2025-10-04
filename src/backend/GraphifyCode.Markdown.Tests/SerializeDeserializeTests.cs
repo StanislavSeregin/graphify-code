@@ -65,9 +65,8 @@ public class SerializeDeserializeTests
     private const string EndpointsMarkdown = """
         # Endpoints
 
-        ## Endpoint
+        ## GetUser
         - Id: c97aa83a-8947-49d9-b1a3-d61bc47e361e
-        - Name: GetUser
         - Description: Retrieves user by ID
         - Type: http
 
@@ -75,9 +74,8 @@ public class SerializeDeserializeTests
         - LastAnalyzedAt: 15.10.2024 15:00:00
         - RelativeCodePath: src/controllers/UserController.cs
 
-        ## Endpoint
+        ## CreateUser
         - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
-        - Name: CreateUser
         - Description: Creates a new user
         - Type: http
 

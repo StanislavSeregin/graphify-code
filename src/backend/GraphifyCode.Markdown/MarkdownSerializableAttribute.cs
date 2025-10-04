@@ -7,3 +7,9 @@ namespace GraphifyCode.Markdown;
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
 public class MarkdownSerializableAttribute : Attribute { /* NOTHING */ }
+
+/// <summary>
+/// Marks a property whose value should be used as the markdown header when serializing objects in arrays.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
+public class MarkdownHeaderAttribute : Attribute { /* NOTHING */ }

@@ -285,26 +285,61 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             firstProperty = false;
             var currentHeader = new string('#', currentLevel);
             var nextHeader = GetHeaderPrefix(currentLevel);
-            code.Line($$"""
-                sb.AppendLine();
-                foreach (var item in {{Property.Name}})
-                {
-                    sb.AppendLine(item.ToMarkdown().Replace("{{currentHeader}} ", "{{nextHeader}} "));
+
+            // Check if element type has a property marked with MarkdownHeader
+            var headerProperty = GetMarkdownHeaderProperty(elementType);
+
+            if (headerProperty != null)
+            {
+                code.Line($$"""
                     sb.AppendLine();
-                }
-                """);
+                    foreach (var item in {{Property.Name}})
+                    {
+                        var itemMarkdown = item.ToMarkdown();
+                        var itemLines = itemMarkdown.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                        sb.AppendLine($"{{nextHeader}} {item.{{headerProperty.Name}}}");
+                        for (int i = 1; i < itemLines.Length; i++)
+                        {
+                            var line = itemLines[i];
+                            if (string.IsNullOrEmpty(line))
+                            {
+                                sb.AppendLine();
+                                continue;
+                            }
+                            if (line.StartsWith("- {{headerProperty.Name}}: "))
+                                continue;
+                            if (line.StartsWith("{{currentHeader}}"))
+                                sb.AppendLine(line.Substring({{currentLevel - 1}}).Insert(0, "{{nextHeader.Substring(0, currentLevel)}}"));
+                            else
+                                sb.AppendLine(line);
+                        }
+                        sb.AppendLine();
+                    }
+                    """);
+            }
+            else
+            {
+                code.Line($$"""
+                    sb.AppendLine();
+                    foreach (var item in {{Property.Name}})
+                    {
+                        sb.AppendLine(item.ToMarkdown().Replace("{{currentHeader}} ", "{{nextHeader}} "));
+                        sb.AppendLine();
+                    }
+                    """);
+            }
         }
 
         public override void GenerateDeserializationCode(CodeBuilder code, int currentLevel)
         {
             var header = GetHeaderPrefix(currentLevel);
             var listName = $"{Property.Name.ToLowerInvariant()}List";
-            var headerPrefix = new string('#', currentLevel + 1);
+            var headerProperty = GetMarkdownHeaderProperty(elementType);
 
             code.Line($$"""
                 // Parse {{Property.Name}}
                 var {{listName}} = new System.Collections.Generic.List<{{elementType.ToDisplayString()}}>();
-                while (index < lines.Length && lines[index].StartsWith("{{header}} {{elementType.Name}}"))
+                while (index < lines.Length && lines[index].StartsWith("{{header}} "))
                 {
                     var itemStart = index;
                     index++;
@@ -329,7 +364,18 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     }
 
                     var itemLines = new System.Collections.Generic.List<string>();
-                    itemLines.Add(lines[itemStart].Replace("{{header}} ", "# "));
+                    itemLines.Add("# {{elementType.Name}}");
+                """);
+
+            if (headerProperty != null)
+            {
+                code.Line($$"""
+                        var headerValue = lines[itemStart].Substring({{currentLevel + 2}});
+                        itemLines.Add($"- {{headerProperty.Name}}: {headerValue}");
+                    """);
+            }
+
+            code.Line($$"""
                     for (int i = itemStart + 1; i < index; i++)
                     {
                         var line = lines[i];
@@ -343,6 +389,17 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 }
                 obj.{{Property.Name}} = {{listName}}.ToArray();
                 """);
+        }
+
+        private static IPropertySymbol? GetMarkdownHeaderProperty(ITypeSymbol type)
+        {
+            if (type is not INamedTypeSymbol namedType)
+                return null;
+
+            return namedType.GetMembers()
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault(p => p.GetAttributes()
+                    .Any(a => a.AttributeClass?.Name is "MarkdownHeaderAttribute" or "MarkdownHeader"));
         }
     }
 

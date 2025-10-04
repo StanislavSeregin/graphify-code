@@ -14,6 +14,7 @@ public partial class Endpoint
 {
     public Guid Id { get; set; }
 
+    [MarkdownHeader]
     public required string Name { get; set; }
 
     public required string Description { get; set; }
