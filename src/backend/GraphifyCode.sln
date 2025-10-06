@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphifyCode.Markdown.Tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphifyCode.Data", "GraphifyCode.Data\GraphifyCode.Data.csproj", "{80447DE2-1EC4-4FAF-8349-1BBB1C26441D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphifyCode.Api", "GraphifyCode.Api\GraphifyCode.Api.csproj", "{404B5A59-229E-4294-B1B3-32AFCF90276B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{80447DE2-1EC4-4FAF-8349-1BBB1C26441D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{80447DE2-1EC4-4FAF-8349-1BBB1C26441D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{80447DE2-1EC4-4FAF-8349-1BBB1C26441D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{404B5A59-229E-4294-B1B3-32AFCF90276B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{404B5A59-229E-4294-B1B3-32AFCF90276B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{404B5A59-229E-4294-B1B3-32AFCF90276B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{404B5A59-229E-4294-B1B3-32AFCF90276B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
