@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve --poll 500 --host 0.0.0.0",
+    "start": "ng serve --poll 500 --host 0.0.0.0 --configuration development",
     "build": "ng build",
+    "build:prod": "ng build --configuration production",
     "watch": "ng build --watch --configuration development --poll 500"
   },
   "private": true,
