@@ -26,90 +26,66 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     public async Task<Models.Services> GetServices(CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(cancellationToken);
-        try
+        var serviceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+        var services = new List<Models.Service>();
+
+        foreach (var serviceDir in serviceDirs)
         {
-            var serviceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
-            var services = new List<Models.Service>();
-
-            foreach (var serviceDir in serviceDirs)
+            var servicePath = Path.Combine(serviceDir, SERVICE_FILE_NAME);
+            if (File.Exists(servicePath))
             {
-                var servicePath = Path.Combine(serviceDir, SERVICE_FILE_NAME);
-                if (File.Exists(servicePath))
+                var markdown = await File.ReadAllTextAsync(servicePath, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(markdown))
                 {
-                    var markdown = await File.ReadAllTextAsync(servicePath, cancellationToken);
-                    if (!string.IsNullOrWhiteSpace(markdown))
+                    var originalService = Service.FromMarkdown(markdown);
+                    var service = new Models.Service()
                     {
-                        var originalService = Service.FromMarkdown(markdown);
-                        var service = new Models.Service()
-                        {
-                            Id = originalService.Id,
-                            Name = originalService.Name,
-                            Description = originalService.Description,
-                            RelativeCodePath = originalService.RelativeCodePath,
-                            LastAnalyzed = originalService.LastAnalyzedAt,
-                            HasEndpoints = File.Exists(Path.Combine(serviceDir, ENDPOINTS_FILE_NAME)),
-                            HasRelations = File.Exists(Path.Combine(serviceDir, RELATIONS_FILE_NAME))
-                        };
+                        Id = originalService.Id,
+                        Name = originalService.Name,
+                        Description = originalService.Description,
+                        RelativeCodePath = originalService.RelativeCodePath,
+                        LastAnalyzed = originalService.LastAnalyzedAt,
+                        HasEndpoints = File.Exists(Path.Combine(serviceDir, ENDPOINTS_FILE_NAME)),
+                        HasRelations = File.Exists(Path.Combine(serviceDir, RELATIONS_FILE_NAME))
+                    };
 
-                        services.Add(service);
-                    }
+                    services.Add(service);
                 }
             }
+        }
 
-            return new Models.Services
-            {
-                ServiceList = [.. services]
-            };
-        }
-        finally
+        return new Models.Services
         {
-            _semaphore.Release();
-        }
+            ServiceList = [.. services]
+        };
     }
 
     public async Task<Endpoints> GetEndpoints(Guid serviceId, CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(cancellationToken);
-        try
+        var endpointsPath = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), ENDPOINTS_FILE_NAME);
+        if (File.Exists(endpointsPath))
         {
-            var endpointsPath = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), ENDPOINTS_FILE_NAME);
-            if (File.Exists(endpointsPath))
+            var markdown = await File.ReadAllTextAsync(endpointsPath, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(markdown))
             {
-                var markdown = await File.ReadAllTextAsync(endpointsPath, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(markdown))
-                {
-                    return Endpoints.FromMarkdown(markdown);
-                }
+                return Endpoints.FromMarkdown(markdown);
             }
-            return new Endpoints { EndpointList = [] };
         }
-        finally
-        {
-            _semaphore.Release();
-        }
+        return new Endpoints { EndpointList = [] };
     }
 
     public async Task<Relations> GetRelations(Guid serviceId, CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(cancellationToken);
-        try
+        var relationsPath = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), RELATIONS_FILE_NAME);
+        if (File.Exists(relationsPath))
         {
-            var relationsPath = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), RELATIONS_FILE_NAME);
-            if (File.Exists(relationsPath))
+            var markdown = await File.ReadAllTextAsync(relationsPath, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(markdown))
             {
-                var markdown = await File.ReadAllTextAsync(relationsPath, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(markdown))
-                {
-                    return Relations.FromMarkdown(markdown);
-                }
+                return Relations.FromMarkdown(markdown);
             }
-            return new Relations { TargetEndpointIds = [] };
         }
-        finally
-        {
-            _semaphore.Release();
-        }
+        return new Relations { TargetEndpointIds = [] };
     }
 
     public async Task<Guid> CreateOrUpdateService(string name, string description, Guid? serviceId, string? codePath, CancellationToken cancellationToken)
@@ -419,74 +395,58 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     public async Task<Models.UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(cancellationToken);
-        try
+        var usecasesDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), USECASES_DIR_NAME);
+        if (!Directory.Exists(usecasesDir))
         {
-            var usecasesDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), USECASES_DIR_NAME);
-            if (!Directory.Exists(usecasesDir))
-            {
-                return new Models.UseCases { UseCaseList = [] };
-            }
+            return new Models.UseCases { UseCaseList = [] };
+        }
 
-            var usecaseFiles = Directory.GetFiles(usecasesDir, "*.md");
-            var usecases = new List<Models.UseCaseSummary>();
+        var usecaseFiles = Directory.GetFiles(usecasesDir, "*.md");
+        var usecases = new List<Models.UseCaseSummary>();
 
-            foreach (var usecaseFile in usecaseFiles)
+        foreach (var usecaseFile in usecaseFiles)
+        {
+            var markdown = await File.ReadAllTextAsync(usecaseFile, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(markdown))
             {
-                var markdown = await File.ReadAllTextAsync(usecaseFile, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(markdown))
+                var useCase = UseCase.FromMarkdown(markdown);
+                var summary = new Models.UseCaseSummary
                 {
-                    var useCase = UseCase.FromMarkdown(markdown);
-                    var summary = new Models.UseCaseSummary
-                    {
-                        Id = useCase.Id,
-                        Name = useCase.Name,
-                        Description = useCase.Description,
-                        InitiatingEndpointId = useCase.InitiatingEndpointId,
-                        LastAnalyzed = useCase.LastAnalyzedAt,
-                        StepCount = useCase.Steps.Length
-                    };
-                    usecases.Add(summary);
-                }
+                    Id = useCase.Id,
+                    Name = useCase.Name,
+                    Description = useCase.Description,
+                    InitiatingEndpointId = useCase.InitiatingEndpointId,
+                    LastAnalyzed = useCase.LastAnalyzedAt,
+                    StepCount = useCase.Steps.Length
+                };
+                usecases.Add(summary);
             }
+        }
 
-            return new Models.UseCases { UseCaseList = [.. usecases] };
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        return new Models.UseCases { UseCaseList = [.. usecases] };
     }
 
     public async Task<UseCase> GetUseCaseDetails(Guid useCaseId, CancellationToken cancellationToken)
     {
-        await _semaphore.WaitAsync(cancellationToken);
-        try
+        var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+        foreach (var serviceDir in allServiceDirs)
         {
-            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
-            foreach (var serviceDir in allServiceDirs)
+            var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+            if (Directory.Exists(usecasesDir))
             {
-                var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
-                if (Directory.Exists(usecasesDir))
+                var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
+                if (File.Exists(usecasePath))
                 {
-                    var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
-                    if (File.Exists(usecasePath))
+                    var markdown = await File.ReadAllTextAsync(usecasePath, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(markdown))
                     {
-                        var markdown = await File.ReadAllTextAsync(usecasePath, cancellationToken);
-                        if (!string.IsNullOrWhiteSpace(markdown))
-                        {
-                            return UseCase.FromMarkdown(markdown);
-                        }
+                        return UseCase.FromMarkdown(markdown);
                     }
                 }
             }
+        }
 
-            throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
+        throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
     }
 
     public async Task<Guid> CreateOrUpdateUseCase(Guid serviceId, string name, string description, Guid initiatingEndpointId, Guid? useCaseId, CancellationToken cancellationToken)

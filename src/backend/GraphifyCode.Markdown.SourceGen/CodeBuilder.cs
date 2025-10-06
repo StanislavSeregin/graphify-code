@@ -27,18 +27,11 @@ internal class CodeBuilder
         }
         else
         {
-            var lines = line.Split(['\r', '\n'], StringSplitOptions.None);
+            var lines = line.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             foreach (var singleLine in lines)
             {
-                if (string.IsNullOrEmpty(singleLine))
-                {
-                    _sb.AppendLine();
-                }
-                else
-                {
-                    AppendIndent();
-                    _sb.AppendLine(singleLine);
-                }
+                AppendIndent();
+                _sb.AppendLine(singleLine);
             }
         }
         return this;
