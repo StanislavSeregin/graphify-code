@@ -1,5 +1,5 @@
-﻿using GraphifyCode.Core.Settings;
-using GraphifyCode.Data.Entities;
+﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Settings;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -8,9 +8,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace GraphifyCode.Data;
+namespace GraphifyCode.Data.Services;
 
-public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
+public class DataService(IOptions<MarkdownStorageSettings> options) : IDataService
 {
     private const string SERVICE_FILE_NAME = "service.md";
 
@@ -20,13 +20,13 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     private const string USECASES_DIR_NAME = "usecases";
 
-    private readonly GraphifyCodeSettings _settings = options.Value;
+    private readonly MarkdownStorageSettings _settings = options.Value;
 
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public async Task<Models.Services> GetServices(CancellationToken cancellationToken)
     {
-        var serviceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+        var serviceDirs = Directory.GetDirectories(_settings.Path);
         var services = new List<Models.Service>();
 
         foreach (var serviceDir in serviceDirs)
@@ -62,7 +62,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     public async Task<Endpoints> GetEndpoints(Guid serviceId, CancellationToken cancellationToken)
     {
-        var endpointsPath = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), ENDPOINTS_FILE_NAME);
+        var endpointsPath = Path.Combine(_settings.Path, serviceId.ToString(), ENDPOINTS_FILE_NAME);
         if (File.Exists(endpointsPath))
         {
             var markdown = await File.ReadAllTextAsync(endpointsPath, cancellationToken);
@@ -76,7 +76,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     public async Task<Relations> GetRelations(Guid serviceId, CancellationToken cancellationToken)
     {
-        var relationsPath = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), RELATIONS_FILE_NAME);
+        var relationsPath = Path.Combine(_settings.Path, serviceId.ToString(), RELATIONS_FILE_NAME);
         if (File.Exists(relationsPath))
         {
             var markdown = await File.ReadAllTextAsync(relationsPath, cancellationToken);
@@ -94,7 +94,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         try
         {
             var id = serviceId ?? Guid.NewGuid();
-            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, id.ToString());
+            var serviceDir = Path.Combine(_settings.Path, id.ToString());
 
             Directory.CreateDirectory(serviceDir);
 
@@ -124,7 +124,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString());
+            var serviceDir = Path.Combine(_settings.Path, serviceId.ToString());
             if (!Directory.Exists(serviceDir))
             {
                 throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
@@ -133,7 +133,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             var endpoints = await GetEndpoints(serviceId, cancellationToken);
             var endpointIds = endpoints.EndpointList.Select(e => e.Id).ToHashSet();
 
-            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            var allServiceDirs = Directory.GetDirectories(_settings.Path);
             foreach (var dir in allServiceDirs)
             {
                 var relationsPath = Path.Combine(dir, RELATIONS_FILE_NAME);
@@ -169,7 +169,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString());
+            var serviceDir = Path.Combine(_settings.Path, serviceId.ToString());
             if (!Directory.Exists(serviceDir))
             {
                 throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
@@ -238,7 +238,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            var allServiceDirs = Directory.GetDirectories(_settings.Path);
             foreach (var serviceDir in allServiceDirs)
             {
                 var endpointsPath = Path.Combine(serviceDir, ENDPOINTS_FILE_NAME);
@@ -319,7 +319,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, sourceServiceId.ToString());
+            var serviceDir = Path.Combine(_settings.Path, sourceServiceId.ToString());
             if (!Directory.Exists(serviceDir))
             {
                 throw new InvalidOperationException($"Service with ID {sourceServiceId} does not exist");
@@ -367,7 +367,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, sourceServiceId.ToString());
+            var serviceDir = Path.Combine(_settings.Path, sourceServiceId.ToString());
             if (!Directory.Exists(serviceDir))
             {
                 throw new InvalidOperationException($"Service with ID {sourceServiceId} does not exist");
@@ -395,7 +395,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     public async Task<Models.UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken)
     {
-        var usecasesDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), USECASES_DIR_NAME);
+        var usecasesDir = Path.Combine(_settings.Path, serviceId.ToString(), USECASES_DIR_NAME);
         if (!Directory.Exists(usecasesDir))
         {
             return new Models.UseCases { UseCaseList = [] };
@@ -428,7 +428,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     public async Task<UseCase> GetUseCaseDetails(Guid useCaseId, CancellationToken cancellationToken)
     {
-        var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+        var allServiceDirs = Directory.GetDirectories(_settings.Path);
         foreach (var serviceDir in allServiceDirs)
         {
             var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
@@ -454,7 +454,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString());
+            var serviceDir = Path.Combine(_settings.Path, serviceId.ToString());
             if (!Directory.Exists(serviceDir))
             {
                 throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
@@ -517,7 +517,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             // Validate serviceId if provided
             if (serviceId.HasValue)
             {
-                var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.Value.ToString());
+                var serviceDir = Path.Combine(_settings.Path, serviceId.Value.ToString());
                 if (!Directory.Exists(serviceDir))
                 {
                     throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
@@ -528,7 +528,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             if (endpointId.HasValue)
             {
                 bool endpointExists = false;
-                foreach (var dir in Directory.GetDirectories(_settings.GraphifyCodeDataPath))
+                foreach (var dir in Directory.GetDirectories(_settings.Path))
                 {
                     var endpointsPath = Path.Combine(dir, ENDPOINTS_FILE_NAME);
                     if (File.Exists(endpointsPath))
@@ -569,7 +569,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             useCase.Steps = newSteps;
             useCase.LastAnalyzedAt = DateTime.UtcNow;
 
-            foreach (var serviceDir in Directory.GetDirectories(_settings.GraphifyCodeDataPath))
+            foreach (var serviceDir in Directory.GetDirectories(_settings.Path))
             {
                 var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
                 if (Directory.Exists(usecasesDir))
@@ -607,7 +607,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             // Validate serviceId if provided and not empty string
             if (serviceId.HasValue && serviceId.Value != Guid.Empty)
             {
-                var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.Value.ToString());
+                var serviceDir = Path.Combine(_settings.Path, serviceId.Value.ToString());
                 if (!Directory.Exists(serviceDir))
                 {
                     throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
@@ -618,7 +618,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             if (endpointId.HasValue && endpointId.Value != Guid.Empty)
             {
                 bool endpointExists = false;
-                var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+                var allServiceDirs = Directory.GetDirectories(_settings.Path);
                 foreach (var dir in allServiceDirs)
                 {
                     var endpointsPath = Path.Combine(dir, ENDPOINTS_FILE_NAME);
@@ -653,7 +653,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
             useCase.LastAnalyzedAt = DateTime.UtcNow;
 
-            var allServiceDirsUpdate = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            var allServiceDirsUpdate = Directory.GetDirectories(_settings.Path);
             foreach (var serviceDir in allServiceDirsUpdate)
             {
                 var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
@@ -686,7 +686,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
             useCase.Steps = [];
             useCase.LastAnalyzedAt = DateTime.UtcNow;
 
-            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            var allServiceDirs = Directory.GetDirectories(_settings.Path);
             foreach (var serviceDir in allServiceDirs)
             {
                 var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
@@ -715,7 +715,7 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            var allServiceDirs = Directory.GetDirectories(_settings.Path);
             foreach (var serviceDir in allServiceDirs)
             {
                 var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);

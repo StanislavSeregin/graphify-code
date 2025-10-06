@@ -1,5 +1,5 @@
-﻿using GraphifyCode.Core.Settings;
-using GraphifyCode.Data;
+﻿using GraphifyCode.Data.Services;
+using GraphifyCode.Data.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,10 +17,10 @@ public class Program
         var builder = Host.CreateApplicationBuilder(args);
         builder.Logging.AddConsole();
         builder.Services
-            .Configure<GraphifyCodeSettings>(options =>
+            .Configure<MarkdownStorageSettings>(options =>
             {
-                options.GraphifyCodeDataPath = GetDataPath();
-                Console.WriteLine($"Selected path is {options.GraphifyCodeDataPath}");
+                options.Path = GetDataPath();
+                Console.WriteLine($"Selected path is {options.Path}");
             })
             .AddSingleton<IDataService, DataService>()
             .AddMcpServer()

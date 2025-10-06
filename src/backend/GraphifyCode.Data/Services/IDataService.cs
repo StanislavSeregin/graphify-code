@@ -3,7 +3,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace GraphifyCode.Data;
+namespace GraphifyCode.Data.Services;
 
 public interface IDataService
 {

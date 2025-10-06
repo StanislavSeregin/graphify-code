@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36518.9
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphifyCode.Core", "GraphifyCode.Core\GraphifyCode.Core.csproj", "{CB4FD833-4317-434B-8DFE-95A54C85BC24}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphifyCode.MCP", "GraphifyCode.MCP\GraphifyCode.MCP.csproj", "{DD63848C-491C-4E60-BAD8-F7F75E7B0E7D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphifyCode.Markdown.SourceGen", "GraphifyCode.Markdown.SourceGen\GraphifyCode.Markdown.SourceGen.csproj", "{D250ABA9-3317-4989-A646-BE7E888995F7}"
@@ -23,10 +21,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{CB4FD833-4317-434B-8DFE-95A54C85BC24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CB4FD833-4317-434B-8DFE-95A54C85BC24}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CB4FD833-4317-434B-8DFE-95A54C85BC24}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CB4FD833-4317-434B-8DFE-95A54C85BC24}.Release|Any CPU.Build.0 = Release|Any CPU
 		{DD63848C-491C-4E60-BAD8-F7F75E7B0E7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{DD63848C-491C-4E60-BAD8-F7F75E7B0E7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DD63848C-491C-4E60-BAD8-F7F75E7B0E7D}.Release|Any CPU.ActiveCfg = Release|Any CPU

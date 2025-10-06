@@ -1,5 +1,5 @@
-using GraphifyCode.Core.Settings;
-using GraphifyCode.Data;
+using GraphifyCode.Data.Services;
+using GraphifyCode.Data.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +21,7 @@ public class Program
         builder.Logging.AddConsole();
 
         // Configure settings from appsettings.json and environment variables
-        builder.Services.Configure<GraphifyCodeSettings>(builder.Configuration.GetSection("GraphifyCode"));
+        builder.Services.Configure<MarkdownStorageSettings>(builder.Configuration.GetSection("MarkdownStorage"));
 
         // Add services to the container
         builder.Services.AddCors(options =>
