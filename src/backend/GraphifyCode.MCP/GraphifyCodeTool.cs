@@ -290,4 +290,127 @@ public class GraphifyCodeTool(IDataService dataService)
             return $"Error deleting relation: {ex.Message}";
         }
     }
+
+    [McpServerTool, Description("""
+        Get all use cases for a specific service.
+        Use cases represent complex business processes that start from a service's endpoint and flow through multiple services.
+        Returns Markdown formatted list with use case metadata: ID, name, description, initiating endpoint ID, last analyzed timestamp, and step count.
+        Use this to discover documented business processes and understand what complex workflows are handled by a service.
+        Note: Not every endpoint has a use case - they are created only for multi-step processes that require analytical documentation.
+        """)]
+    public async Task<string> GetUseCases(
+        [Description("Service ID as GUID string (the service whose use cases you want to retrieve). Use GetServices to find service IDs.")] string serviceId,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
+
+    [McpServerTool, Description("""
+        Get detailed information about a specific use case including all its steps.
+        Use cases describe complex business processes as a sequence of steps flowing through the system.
+        Each step can represent internal logic within a service or an integration call to another service's endpoint.
+        Returns Markdown formatted use case with complete step-by-step breakdown including service contexts and endpoint calls.
+        Steps are ordered sequentially - the order in the response reflects the business process flow.
+        Use this to understand the full business flow, trace logic through services, and navigate to specific code implementations.
+        """)]
+    public async Task<string> GetUseCaseDetails(
+        [Description("Use case ID as GUID string. Use GetUseCases to find use case IDs.")] string useCaseId,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
+
+    [McpServerTool, Description("""
+        Create or update a use case for documenting complex business processes.
+        Use cases capture multi-step workflows that span multiple services, providing analytical context on top of the technical architecture.
+        Each use case must start from a specific endpoint (initiating endpoint). Steps are added separately using AddStep tool.
+        The initiatingEndpointId is validated to ensure it exists and belongs to the specified service.
+        If useCaseId is provided, updates the existing use case metadata (name, description, initiatingEndpointId); otherwise creates a new use case with a generated ID.
+        Returns the use case ID (new or existing) for use in subsequent AddStep operations.
+        Important: This operation only manages use case metadata. Use AddStep, UpdateStep, and DeleteAllSteps to manage the steps.
+        """)]
+    public async Task<string> CreateOrUpdateUseCase(
+        [Description("Service ID as GUID string (the service that owns the initiating endpoint). Use GetServices to find service IDs.")] string serviceId,
+        [Description("Use case name (e.g., 'Order Checkout with Payment', 'User Registration Flow', 'Daily Inventory Synchronization')")] string name,
+        [Description("Detailed use case description explaining the business purpose, expected outcome, and overall process context")] string description,
+        [Description("Initiating endpoint ID as GUID string (the endpoint where this business process starts). Must belong to the specified service. Use GetEndpoints to find endpoint IDs.")] string initiatingEndpointId,
+        [Description("Use case ID as GUID string (optional). Provide only when updating an existing use case. Omit to create a new use case.")] string? useCaseId = null,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
+
+    [McpServerTool, Description("""
+        Add a new step to the end of a use case's step sequence.
+        Steps represent sequential actions in a business process flow and are added in the order they should execute.
+        Each step can represent: internal service logic (serviceId only), integration calls (serviceId + endpointId), or abstract descriptions (neither).
+        When a step represents an integration call: serviceId indicates the calling service, endpointId indicates the called endpoint in another service.
+        All provided serviceId and endpointId values are validated to ensure they exist in the system.
+        Returns confirmation with the step index (position) in the sequence for reference.
+        """)]
+    public async Task<string> AddStep(
+        [Description("Use case ID as GUID string (the use case to add the step to). Use GetUseCases to find use case IDs.")] string useCaseId,
+        [Description("Step name describing the action (e.g., 'Validate user input', 'Reserve inventory', 'Send notification email')")] string name,
+        [Description("Detailed step description explaining what happens, business rules, conditions, or expected outcomes")] string description,
+        [Description("Service ID as GUID string (optional). The service where this step executes. Omit for abstract/conceptual steps. Use GetServices to find service IDs.")] string? serviceId = null,
+        [Description("Endpoint ID as GUID string (optional). The endpoint being called if this step represents an integration call to another service. When specified, serviceId should indicate the calling service. Use GetEndpoints to find endpoint IDs.")] string? endpointId = null,
+        [Description("Relative path to step implementation with optional line number (e.g., 'src/Handlers/OrderHandler.cs:123', 'src/Services/ValidationService.cs'). Helps navigate to the actual code for this step.")] string? relativeCodePath = null,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
+
+    [McpServerTool, Description("""
+        Update an existing step in a use case by its index position.
+        Steps are indexed starting from 0. Use GetUseCaseDetails to see all steps with their current positions.
+        Only provided parameters are updated - omitted parameters keep their existing values.
+        All provided serviceId and endpointId values are validated to ensure they exist in the system.
+        Use this for targeted corrections to step details without recreating the entire use case.
+        """)]
+    public async Task<string> UpdateStep(
+        [Description("Use case ID as GUID string (the use case containing the step). Use GetUseCases to find use case IDs.")] string useCaseId,
+        [Description("Step index (0-based position in the sequence). Use GetUseCaseDetails to see step positions.")] int stepIndex,
+        [Description("Step name (optional). Provide only if changing the name.")] string? name = null,
+        [Description("Step description (optional). Provide only if changing the description.")] string? description = null,
+        [Description("Service ID as GUID string (optional). Provide only if changing the service context. Set to empty string to clear. Use GetServices to find service IDs.")] string? serviceId = null,
+        [Description("Endpoint ID as GUID string (optional). Provide only if changing the called endpoint. Set to empty string to clear. Use GetEndpoints to find endpoint IDs.")] string? endpointId = null,
+        [Description("Relative code path (optional). Provide only if changing the code reference. Set to empty string to clear.")] string? relativeCodePath = null,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
+
+    [McpServerTool, Description("""
+        Delete all steps from a use case while keeping the use case metadata intact.
+        This is useful when you need to completely rebuild the step sequence due to significant process changes.
+        After deletion, the use case will still exist but will have zero steps.
+        Use AddStep to populate with new steps after clearing.
+        WARNING: This operation cannot be undone. All step data will be permanently lost.
+        """)]
+    public async Task<string> DeleteAllSteps(
+        [Description("Use case ID as GUID string (the use case whose steps should be deleted). Use GetUseCases to find use case IDs.")] string useCaseId,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
+
+    [McpServerTool, Description("""
+        Delete a use case permanently including all its steps and metadata.
+        WARNING: This is a destructive operation that cannot be undone.
+        Use this when a business process is no longer relevant, was documented incorrectly, or the architecture has changed significantly.
+        This only removes the use case documentation - it does not affect services, endpoints, or relations.
+        """)]
+    public async Task<string> DeleteUseCase(
+        [Description("Use case ID as GUID string. Use GetUseCases to find use case IDs.")] string useCaseId,
+        CancellationToken cancellationToken = default)
+    {
+        // TODO: Implementation
+        throw new NotImplementedException();
+    }
 }
