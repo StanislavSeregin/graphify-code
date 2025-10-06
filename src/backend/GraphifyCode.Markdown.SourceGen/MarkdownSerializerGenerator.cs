@@ -222,7 +222,19 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             firstProperty = false;
             var formatExpr = GetFormatExpression(Property.Type, Property.Name);
-            code.Line($"sb.AppendLine($\"- {Property.Name}: {{{formatExpr}}}\");");
+
+            // Check if property is nullable
+            if (IsNullableType(Property.Type))
+            {
+                code.Nest($"if ({Property.Name} != null)", ifBlock =>
+                {
+                    ifBlock.Line($"sb.AppendLine($\"- {Property.Name}: {{{formatExpr}}}\");");
+                });
+            }
+            else
+            {
+                code.Line($"sb.AppendLine($\"- {Property.Name}: {{{formatExpr}}}\");");
+            }
         }
 
         public override void GenerateDeserializationCode(CodeBuilder code, int currentLevel)
@@ -449,6 +461,18 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
     // Helper methods
     private static string GetFormatExpression(ITypeSymbol type, string propertyName)
     {
+        // Handle nullable types
+        if (type is INamedTypeSymbol { NullableAnnotation: NullableAnnotation.Annotated, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } namedType)
+        {
+            var underlyingType = namedType.TypeArguments[0];
+            if (underlyingType.SpecialType == SpecialType.System_DateTime ||
+                (underlyingType.Name == "DateTime" && underlyingType.ContainingNamespace?.ToDisplayString() == "System"))
+            {
+                return $"{propertyName}.Value.ToString(\"dd.MM.yyyy HH:mm:ss\", System.Globalization.CultureInfo.InvariantCulture)";
+            }
+            return $"{propertyName}.Value";
+        }
+
         if (type.SpecialType == SpecialType.System_DateTime ||
             (type.Name == "DateTime" && type.ContainingNamespace?.ToDisplayString() == "System"))
         {
@@ -457,8 +481,57 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         return propertyName;
     }
 
+    private static bool IsNullableType(ITypeSymbol type)
+    {
+        // Check for Nullable<T>
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+            return true;
+
+        // Check for reference types with nullable annotation
+        if (type.IsReferenceType && type.NullableAnnotation == NullableAnnotation.Annotated)
+            return true;
+
+        return false;
+    }
+
     private static string GetParseExpression(ITypeSymbol type, string variableName)
     {
+        // Handle nullable types
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } namedType)
+        {
+            var underlyingType = namedType.TypeArguments[0];
+            var underlyingParseExpr = underlyingType.SpecialType switch
+            {
+                SpecialType.System_Boolean => $"bool.Parse({variableName})",
+                SpecialType.System_Byte => $"byte.Parse({variableName})",
+                SpecialType.System_SByte => $"sbyte.Parse({variableName})",
+                SpecialType.System_Int16 => $"short.Parse({variableName})",
+                SpecialType.System_UInt16 => $"ushort.Parse({variableName})",
+                SpecialType.System_Int32 => $"int.Parse({variableName})",
+                SpecialType.System_UInt32 => $"uint.Parse({variableName})",
+                SpecialType.System_Int64 => $"long.Parse({variableName})",
+                SpecialType.System_UInt64 => $"ulong.Parse({variableName})",
+                SpecialType.System_Single => $"float.Parse({variableName})",
+                SpecialType.System_Double => $"double.Parse({variableName})",
+                SpecialType.System_Decimal => $"decimal.Parse({variableName})",
+                SpecialType.System_Char => $"char.Parse({variableName})",
+                SpecialType.System_DateTime => $"System.DateTime.ParseExact({variableName}, \"dd.MM.yyyy HH:mm:ss\", System.Globalization.CultureInfo.InvariantCulture)",
+                _ => underlyingType.Name switch
+                {
+                    "Guid" => $"System.Guid.Parse({variableName})",
+                    "DateTime" => $"System.DateTime.ParseExact({variableName}, \"dd.MM.yyyy HH:mm:ss\", System.Globalization.CultureInfo.InvariantCulture)",
+                    _ => variableName
+                }
+            };
+            return underlyingParseExpr;
+        }
+
+        // Handle nullable reference types
+        if (type.IsReferenceType && type.NullableAnnotation == NullableAnnotation.Annotated)
+        {
+            return variableName;
+        }
+
         return type.SpecialType switch
         {
             SpecialType.System_Boolean => $"bool.Parse({variableName})",
@@ -485,23 +558,39 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         };
     }
 
-    private static bool IsPrimitiveOrString(ITypeSymbol type) => type.SpecialType switch
+    private static bool IsPrimitiveOrString(ITypeSymbol type)
     {
-        SpecialType.System_Boolean or
-        SpecialType.System_Byte or
-        SpecialType.System_SByte or
-        SpecialType.System_Int16 or
-        SpecialType.System_UInt16 or
-        SpecialType.System_Int32 or
-        SpecialType.System_UInt32 or
-        SpecialType.System_Int64 or
-        SpecialType.System_UInt64 or
-        SpecialType.System_Single or
-        SpecialType.System_Double or
-        SpecialType.System_Decimal or
-        SpecialType.System_Char or
-        SpecialType.System_String or
-        SpecialType.System_DateTime => true,
-        _ => (type.Name == "Guid" || type.Name == "DateTime") && type.ContainingNamespace?.ToDisplayString() == "System"
-    };
+        // Handle nullable types
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } namedType)
+        {
+            return IsPrimitiveOrString(namedType.TypeArguments[0]);
+        }
+
+        // Handle nullable reference types
+        if (type.IsReferenceType && type.NullableAnnotation == NullableAnnotation.Annotated)
+        {
+            var nonNullableType = type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+            return IsPrimitiveOrString(nonNullableType);
+        }
+
+        return type.SpecialType switch
+        {
+            SpecialType.System_Boolean or
+            SpecialType.System_Byte or
+            SpecialType.System_SByte or
+            SpecialType.System_Int16 or
+            SpecialType.System_UInt16 or
+            SpecialType.System_Int32 or
+            SpecialType.System_UInt32 or
+            SpecialType.System_Int64 or
+            SpecialType.System_UInt64 or
+            SpecialType.System_Single or
+            SpecialType.System_Double or
+            SpecialType.System_Decimal or
+            SpecialType.System_Char or
+            SpecialType.System_String or
+            SpecialType.System_DateTime => true,
+            _ => (type.Name == "Guid" || type.Name == "DateTime") && type.ContainingNamespace?.ToDisplayString() == "System"
+        };
+    }
 }

@@ -144,4 +144,69 @@ public class SerializeDeserializeTests
         // Assert
         obj.Should().BeEquivalentTo(RelationsData);
     }
+
+    private static readonly UseCase UseCaseData = new()
+    {
+        Id = Guid.Parse("a1b2c3d4-e5f6-4789-a012-3456789abcde"),
+        Name = "User Registration",
+        Description = "Complete user registration flow",
+        InitiatingEndpointId = Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e"),
+        LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
+        Steps =
+        [
+            new UseCaseStep
+            {
+                Name = "Validate Input",
+                Description = "Validate user input data",
+                ServiceId = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+                EndpointId = null,
+                RelativeCodePath = "src/validators/UserValidator.cs"
+            },
+            new UseCaseStep
+            {
+                Name = "Create User",
+                Description = "Create user in database",
+                ServiceId = null,
+                EndpointId = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+                RelativeCodePath = null
+            }
+        ]
+    };
+
+    private const string UseCaseMarkdown = """
+        # User Registration
+        - Id: a1b2c3d4-e5f6-4789-a012-3456789abcde
+        - Description: Complete user registration flow
+        - InitiatingEndpointId: c97aa83a-8947-49d9-b1a3-d61bc47e361e
+        - LastAnalyzedAt: 15.10.2024 14:30:00
+
+        ## Validate Input
+        - Description: Validate user input data
+        - ServiceId: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - RelativeCodePath: src/validators/UserValidator.cs
+
+        ## Create User
+        - Description: Create user in database
+        - EndpointId: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        """;
+
+    [Test]
+    public void Serialize_UseCase_MarkdownShouldBeExpected()
+    {
+        // Act
+        var markdown = UseCaseData.ToMarkdown();
+
+        // Assert
+        markdown.Should().Be(UseCaseMarkdown);
+    }
+
+    [Test]
+    public void Deserialize_UseCase_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = UseCase.FromMarkdown(UseCaseMarkdown);
+
+        // Assert
+        obj.Should().BeEquivalentTo(UseCaseData);
+    }
 }

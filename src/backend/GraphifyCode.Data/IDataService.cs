@@ -24,4 +24,18 @@ public interface IDataService
     Task AddRelation(Guid sourceServiceId, Guid targetEndpointId, CancellationToken cancellationToken);
 
     Task DeleteRelation(Guid sourceServiceId, Guid targetEndpointId, CancellationToken cancellationToken);
+
+    Task<Models.UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken);
+
+    Task<UseCase> GetUseCaseDetails(Guid useCaseId, CancellationToken cancellationToken);
+
+    Task<Guid> CreateOrUpdateUseCase(Guid serviceId, string name, string description, Guid initiatingEndpointId, Guid? useCaseId, CancellationToken cancellationToken);
+
+    Task<int> AddStep(Guid useCaseId, string name, string description, Guid? serviceId, Guid? endpointId, string? relativeCodePath, CancellationToken cancellationToken);
+
+    Task UpdateStep(Guid useCaseId, int stepIndex, string? name, string? description, Guid? serviceId, Guid? endpointId, string? relativeCodePath, CancellationToken cancellationToken);
+
+    Task DeleteAllSteps(Guid useCaseId, CancellationToken cancellationToken);
+
+    Task DeleteUseCase(Guid useCaseId, CancellationToken cancellationToken);
 }

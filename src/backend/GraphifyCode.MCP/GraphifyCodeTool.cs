@@ -302,8 +302,25 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Service ID as GUID string (the service whose use cases you want to retrieve). Use GetServices to find service IDs.")] string serviceId,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(serviceId, out var parsedServiceId))
+        {
+            return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
+        }
+
+        try
+        {
+            var useCases = await dataService.GetUseCases(parsedServiceId, cancellationToken);
+            if (useCases.UseCaseList.Length == 0)
+            {
+                return $"No use cases found for service {serviceId}.";
+            }
+
+            return useCases.ToMarkdown();
+        }
+        catch (Exception ex)
+        {
+            return $"Error reading use cases: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("""
@@ -318,8 +335,20 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Use case ID as GUID string. Use GetUseCases to find use case IDs.")] string useCaseId,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(useCaseId, out var parsedUseCaseId))
+        {
+            return $"Error: Invalid use case ID format. Expected GUID, got: {useCaseId}";
+        }
+
+        try
+        {
+            var useCase = await dataService.GetUseCaseDetails(parsedUseCaseId, cancellationToken);
+            return useCase.ToMarkdown();
+        }
+        catch (Exception ex)
+        {
+            return $"Error reading use case details: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("""
@@ -339,8 +368,35 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Use case ID as GUID string (optional). Provide only when updating an existing use case. Omit to create a new use case.")] string? useCaseId = null,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(serviceId, out var parsedServiceId))
+        {
+            return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
+        }
+
+        if (!Guid.TryParse(initiatingEndpointId, out var parsedInitiatingEndpointId))
+        {
+            return $"Error: Invalid initiating endpoint ID format. Expected GUID, got: {initiatingEndpointId}";
+        }
+
+        Guid? parsedUseCaseId = null;
+        if (!string.IsNullOrWhiteSpace(useCaseId))
+        {
+            if (!Guid.TryParse(useCaseId, out var parsed))
+            {
+                return $"Error: Invalid use case ID format. Expected GUID, got: {useCaseId}";
+            }
+            parsedUseCaseId = parsed;
+        }
+
+        try
+        {
+            var id = await dataService.CreateOrUpdateUseCase(parsedServiceId, name, description, parsedInitiatingEndpointId, parsedUseCaseId, cancellationToken);
+            return $"Use case {(parsedUseCaseId.HasValue ? "updated" : "created")} successfully. Use case ID: {id}";
+        }
+        catch (Exception ex)
+        {
+            return $"Error creating/updating use case: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("""
@@ -360,8 +416,40 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Relative path to step implementation with optional line number (e.g., 'src/Handlers/OrderHandler.cs:123', 'src/Services/ValidationService.cs'). Helps navigate to the actual code for this step.")] string? relativeCodePath = null,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(useCaseId, out var parsedUseCaseId))
+        {
+            return $"Error: Invalid use case ID format. Expected GUID, got: {useCaseId}";
+        }
+
+        Guid? parsedServiceId = null;
+        if (!string.IsNullOrWhiteSpace(serviceId))
+        {
+            if (!Guid.TryParse(serviceId, out var parsed))
+            {
+                return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
+            }
+            parsedServiceId = parsed;
+        }
+
+        Guid? parsedEndpointId = null;
+        if (!string.IsNullOrWhiteSpace(endpointId))
+        {
+            if (!Guid.TryParse(endpointId, out var parsed))
+            {
+                return $"Error: Invalid endpoint ID format. Expected GUID, got: {endpointId}";
+            }
+            parsedEndpointId = parsed;
+        }
+
+        try
+        {
+            var stepIndex = await dataService.AddStep(parsedUseCaseId, name, description, parsedServiceId, parsedEndpointId, relativeCodePath, cancellationToken);
+            return $"Step added successfully at index {stepIndex}.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error adding step: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("""
@@ -381,8 +469,54 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Relative code path (optional). Provide only if changing the code reference. Set to empty string to clear.")] string? relativeCodePath = null,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(useCaseId, out var parsedUseCaseId))
+        {
+            return $"Error: Invalid use case ID format. Expected GUID, got: {useCaseId}";
+        }
+
+        Guid? parsedServiceId = null;
+        if (!string.IsNullOrWhiteSpace(serviceId))
+        {
+            if (serviceId == string.Empty)
+            {
+                parsedServiceId = Guid.Empty; // Signal to clear
+            }
+            else if (!Guid.TryParse(serviceId, out var parsed))
+            {
+                return $"Error: Invalid service ID format. Expected GUID, got: {serviceId}";
+            }
+            else
+            {
+                parsedServiceId = parsed;
+            }
+        }
+
+        Guid? parsedEndpointId = null;
+        if (!string.IsNullOrWhiteSpace(endpointId))
+        {
+            if (endpointId == string.Empty)
+            {
+                parsedEndpointId = Guid.Empty; // Signal to clear
+            }
+            else if (!Guid.TryParse(endpointId, out var parsed))
+            {
+                return $"Error: Invalid endpoint ID format. Expected GUID, got: {endpointId}";
+            }
+            else
+            {
+                parsedEndpointId = parsed;
+            }
+        }
+
+        try
+        {
+            await dataService.UpdateStep(parsedUseCaseId, stepIndex, name, description, parsedServiceId, parsedEndpointId, relativeCodePath, cancellationToken);
+            return $"Step at index {stepIndex} updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error updating step: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("""
@@ -396,8 +530,20 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Use case ID as GUID string (the use case whose steps should be deleted). Use GetUseCases to find use case IDs.")] string useCaseId,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(useCaseId, out var parsedUseCaseId))
+        {
+            return $"Error: Invalid use case ID format. Expected GUID, got: {useCaseId}";
+        }
+
+        try
+        {
+            await dataService.DeleteAllSteps(parsedUseCaseId, cancellationToken);
+            return $"All steps deleted successfully from use case {useCaseId}.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error deleting steps: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("""
@@ -410,7 +556,19 @@ public class GraphifyCodeTool(IDataService dataService)
         [Description("Use case ID as GUID string. Use GetUseCases to find use case IDs.")] string useCaseId,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implementation
-        throw new NotImplementedException();
+        if (!Guid.TryParse(useCaseId, out var parsedUseCaseId))
+        {
+            return $"Error: Invalid use case ID format. Expected GUID, got: {useCaseId}";
+        }
+
+        try
+        {
+            await dataService.DeleteUseCase(parsedUseCaseId, cancellationToken);
+            return $"Use case {useCaseId} deleted successfully.";
+        }
+        catch (Exception ex)
+        {
+            return $"Error deleting use case: {ex.Message}";
+        }
     }
 }

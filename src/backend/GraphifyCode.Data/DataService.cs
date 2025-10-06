@@ -18,6 +18,8 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
 
     private const string RELATIONS_FILE_NAME = "relations.md";
 
+    private const string USECASES_DIR_NAME = "usecases";
+
     private readonly GraphifyCodeSettings _settings = options.Value;
 
     private readonly SemaphoreSlim _semaphore = new(1, 1);
@@ -301,6 +303,29 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
                                     }
                                 }
                             }
+
+                            // Remove use cases where this endpoint is the initiating endpoint
+                            foreach (var dir in allServiceDirs)
+                            {
+                                var usecasesDir = Path.Combine(dir, USECASES_DIR_NAME);
+                                if (Directory.Exists(usecasesDir))
+                                {
+                                    var usecaseFiles = Directory.GetFiles(usecasesDir, "*.md");
+                                    foreach (var usecaseFile in usecaseFiles)
+                                    {
+                                        var ucMarkdown = await File.ReadAllTextAsync(usecaseFile, cancellationToken);
+                                        if (!string.IsNullOrWhiteSpace(ucMarkdown))
+                                        {
+                                            var useCase = UseCase.FromMarkdown(ucMarkdown);
+                                            if (useCase.InitiatingEndpointId == endpointId)
+                                            {
+                                                File.Delete(usecaseFile);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             return;
                         }
                     }
@@ -385,6 +410,367 @@ public class DataService(IOptions<GraphifyCodeSettings> options) : IDataService
                     await File.WriteAllTextAsync(relationsPath, relationsMarkdown, cancellationToken);
                 }
             }
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task<Models.UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var usecasesDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString(), USECASES_DIR_NAME);
+            if (!Directory.Exists(usecasesDir))
+            {
+                return new Models.UseCases { UseCaseList = [] };
+            }
+
+            var usecaseFiles = Directory.GetFiles(usecasesDir, "*.md");
+            var usecases = new List<Models.UseCaseSummary>();
+
+            foreach (var usecaseFile in usecaseFiles)
+            {
+                var markdown = await File.ReadAllTextAsync(usecaseFile, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(markdown))
+                {
+                    var useCase = UseCase.FromMarkdown(markdown);
+                    var summary = new Models.UseCaseSummary
+                    {
+                        Id = useCase.Id,
+                        Name = useCase.Name,
+                        Description = useCase.Description,
+                        InitiatingEndpointId = useCase.InitiatingEndpointId,
+                        LastAnalyzed = useCase.LastAnalyzedAt,
+                        StepCount = useCase.Steps.Length
+                    };
+                    usecases.Add(summary);
+                }
+            }
+
+            return new Models.UseCases { UseCaseList = [.. usecases] };
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task<UseCase> GetUseCaseDetails(Guid useCaseId, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            foreach (var serviceDir in allServiceDirs)
+            {
+                var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+                if (Directory.Exists(usecasesDir))
+                {
+                    var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
+                    if (File.Exists(usecasePath))
+                    {
+                        var markdown = await File.ReadAllTextAsync(usecasePath, cancellationToken);
+                        if (!string.IsNullOrWhiteSpace(markdown))
+                        {
+                            return UseCase.FromMarkdown(markdown);
+                        }
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task<Guid> CreateOrUpdateUseCase(Guid serviceId, string name, string description, Guid initiatingEndpointId, Guid? useCaseId, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.ToString());
+            if (!Directory.Exists(serviceDir))
+            {
+                throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
+            }
+
+            // Validate that initiatingEndpointId exists and belongs to the service
+            var endpoints = await GetEndpoints(serviceId, cancellationToken);
+            if (!endpoints.EndpointList.Any(e => e.Id == initiatingEndpointId))
+            {
+                throw new InvalidOperationException($"Endpoint with ID {initiatingEndpointId} does not exist in service {serviceId}");
+            }
+
+            var id = useCaseId ?? Guid.NewGuid();
+            var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+            Directory.CreateDirectory(usecasesDir);
+
+            var usecasePath = Path.Combine(usecasesDir, $"{id}.md");
+
+            UseCase useCase;
+            if (File.Exists(usecasePath))
+            {
+                // Update existing
+                var markdown = await File.ReadAllTextAsync(usecasePath, cancellationToken);
+                useCase = UseCase.FromMarkdown(markdown);
+                useCase.Name = name;
+                useCase.Description = description;
+                useCase.InitiatingEndpointId = initiatingEndpointId;
+                useCase.LastAnalyzedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                // Create new
+                useCase = new UseCase
+                {
+                    Id = id,
+                    Name = name,
+                    Description = description,
+                    InitiatingEndpointId = initiatingEndpointId,
+                    LastAnalyzedAt = DateTime.UtcNow,
+                    Steps = []
+                };
+            }
+
+            var useCaseMarkdown = useCase.ToMarkdown();
+            await File.WriteAllTextAsync(usecasePath, useCaseMarkdown, cancellationToken);
+
+            return id;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task<int> AddStep(Guid useCaseId, string name, string description, Guid? serviceId, Guid? endpointId, string? relativeCodePath, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            // Validate serviceId if provided
+            if (serviceId.HasValue)
+            {
+                var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.Value.ToString());
+                if (!Directory.Exists(serviceDir))
+                {
+                    throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
+                }
+            }
+
+            // Validate endpointId if provided
+            if (endpointId.HasValue)
+            {
+                bool endpointExists = false;
+                foreach (var dir in Directory.GetDirectories(_settings.GraphifyCodeDataPath))
+                {
+                    var endpointsPath = Path.Combine(dir, ENDPOINTS_FILE_NAME);
+                    if (File.Exists(endpointsPath))
+                    {
+                        var markdown = await File.ReadAllTextAsync(endpointsPath, cancellationToken);
+                        if (!string.IsNullOrWhiteSpace(markdown))
+                        {
+                            var endpoints = Endpoints.FromMarkdown(markdown);
+                            if (endpoints.EndpointList.Any(e => e.Id == endpointId.Value))
+                            {
+                                endpointExists = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!endpointExists)
+                {
+                    throw new InvalidOperationException($"Endpoint with ID {endpointId} does not exist");
+                }
+            }
+
+            var useCase = await GetUseCaseDetails(useCaseId, cancellationToken);
+
+            var newStep = new UseCaseStep
+            {
+                Name = name,
+                Description = description,
+                ServiceId = serviceId,
+                EndpointId = endpointId,
+                RelativeCodePath = relativeCodePath
+            };
+
+            var newSteps = new UseCaseStep[useCase.Steps.Length + 1];
+            Array.Copy(useCase.Steps, newSteps, useCase.Steps.Length);
+            newSteps[^1] = newStep;
+            useCase.Steps = newSteps;
+            useCase.LastAnalyzedAt = DateTime.UtcNow;
+
+            foreach (var serviceDir in Directory.GetDirectories(_settings.GraphifyCodeDataPath))
+            {
+                var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+                if (Directory.Exists(usecasesDir))
+                {
+                    var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
+                    if (File.Exists(usecasePath))
+                    {
+                        var useCaseMarkdown = useCase.ToMarkdown();
+                        await File.WriteAllTextAsync(usecasePath, useCaseMarkdown, cancellationToken);
+                        return useCase.Steps.Length - 1;
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task UpdateStep(Guid useCaseId, int stepIndex, string? name, string? description, Guid? serviceId, Guid? endpointId, string? relativeCodePath, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var useCase = await GetUseCaseDetails(useCaseId, cancellationToken);
+
+            if (stepIndex < 0 || stepIndex >= useCase.Steps.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(stepIndex), $"Step index {stepIndex} is out of range. Use case has {useCase.Steps.Length} steps.");
+            }
+
+            // Validate serviceId if provided and not empty string
+            if (serviceId.HasValue && serviceId.Value != Guid.Empty)
+            {
+                var serviceDir = Path.Combine(_settings.GraphifyCodeDataPath, serviceId.Value.ToString());
+                if (!Directory.Exists(serviceDir))
+                {
+                    throw new InvalidOperationException($"Service with ID {serviceId} does not exist");
+                }
+            }
+
+            // Validate endpointId if provided and not empty string
+            if (endpointId.HasValue && endpointId.Value != Guid.Empty)
+            {
+                bool endpointExists = false;
+                var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+                foreach (var dir in allServiceDirs)
+                {
+                    var endpointsPath = Path.Combine(dir, ENDPOINTS_FILE_NAME);
+                    if (File.Exists(endpointsPath))
+                    {
+                        var markdown = await File.ReadAllTextAsync(endpointsPath, cancellationToken);
+                        if (!string.IsNullOrWhiteSpace(markdown))
+                        {
+                            var endpoints = Endpoints.FromMarkdown(markdown);
+                            if (endpoints.EndpointList.Any(e => e.Id == endpointId.Value))
+                            {
+                                endpointExists = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!endpointExists)
+                {
+                    throw new InvalidOperationException($"Endpoint with ID {endpointId} does not exist");
+                }
+            }
+
+            var step = useCase.Steps[stepIndex];
+
+            if (name != null) step.Name = name;
+            if (description != null) step.Description = description;
+            if (serviceId.HasValue) step.ServiceId = serviceId.Value == Guid.Empty ? null : serviceId.Value;
+            if (endpointId.HasValue) step.EndpointId = endpointId.Value == Guid.Empty ? null : endpointId.Value;
+            if (relativeCodePath != null) step.RelativeCodePath = string.IsNullOrEmpty(relativeCodePath) ? null : relativeCodePath;
+
+            useCase.LastAnalyzedAt = DateTime.UtcNow;
+
+            var allServiceDirsUpdate = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            foreach (var serviceDir in allServiceDirsUpdate)
+            {
+                var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+                if (Directory.Exists(usecasesDir))
+                {
+                    var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
+                    if (File.Exists(usecasePath))
+                    {
+                        var useCaseMarkdown = useCase.ToMarkdown();
+                        await File.WriteAllTextAsync(usecasePath, useCaseMarkdown, cancellationToken);
+                        return;
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task DeleteAllSteps(Guid useCaseId, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var useCase = await GetUseCaseDetails(useCaseId, cancellationToken);
+            useCase.Steps = [];
+            useCase.LastAnalyzedAt = DateTime.UtcNow;
+
+            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            foreach (var serviceDir in allServiceDirs)
+            {
+                var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+                if (Directory.Exists(usecasesDir))
+                {
+                    var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
+                    if (File.Exists(usecasePath))
+                    {
+                        var useCaseMarkdown = useCase.ToMarkdown();
+                        await File.WriteAllTextAsync(usecasePath, useCaseMarkdown, cancellationToken);
+                        return;
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    public async Task DeleteUseCase(Guid useCaseId, CancellationToken cancellationToken)
+    {
+        await _semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var allServiceDirs = Directory.GetDirectories(_settings.GraphifyCodeDataPath);
+            foreach (var serviceDir in allServiceDirs)
+            {
+                var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+                if (Directory.Exists(usecasesDir))
+                {
+                    var usecasePath = Path.Combine(usecasesDir, $"{useCaseId}.md");
+                    if (File.Exists(usecasePath))
+                    {
+                        File.Delete(usecasePath);
+                        return;
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Use case with ID {useCaseId} does not exist");
         }
         finally
         {
