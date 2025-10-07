@@ -92,6 +92,9 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Handle window resize
     window.addEventListener('resize', () => this.onWindowResize());
+
+    // Handle Esc key to reset to initial view
+    window.addEventListener('keydown', (event) => this.onKeyDown(event));
   }
 
   private onWindowResize(): void {
@@ -104,6 +107,36 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
         .strength(1));
       this.simulation.alpha(0.3).restart();
     }
+  }
+
+  private onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      this.resetToInitialView();
+    }
+  }
+
+  private resetToInitialView(): void {
+    const width = this.svgElement.nativeElement.clientWidth;
+    const height = this.svgElement.nativeElement.clientHeight;
+
+    // Calculate initial zoom (same as on page load)
+    const initialScale = Math.min(window.innerWidth, window.innerHeight) / 5000;
+    const clampedScale = Math.max(0.1, Math.min(0.3, initialScale));
+
+    // Center on the graph center
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const translateX = width / 2 - clampedScale * centerX;
+    const translateY = height / 2 - clampedScale * centerY;
+
+    const initialTransform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(clampedScale);
+
+    this.svg
+      .transition()
+      .duration(750)
+      .call(this.zoom.transform, initialTransform);
   }
 
   ngOnDestroy(): void {
@@ -119,8 +152,9 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
         node.componentRef.destroy();
       }
     });
-    // Remove resize listener
+    // Remove event listeners
     window.removeEventListener('resize', () => this.onWindowResize());
+    window.removeEventListener('keydown', (event) => this.onKeyDown(event));
   }
 
   private initSvg(): void {
@@ -150,20 +184,44 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     svg.call(this.zoom);
 
-    // Set initial zoom level based on viewport
-    const initialScale = Math.min(window.innerWidth, window.innerHeight) / 5000;
-    const clampedScale = Math.max(0.1, Math.min(0.3, initialScale));
-    const initialTransform = d3.zoomIdentity.scale(clampedScale);
-    svg.call(this.zoom.transform, initialTransform);
+    // Initial transform will be set after nodes are positioned
+    // This is done in renderGraph() to ensure proper centering
   }
 
   private renderGraph(data: FullGraph): void {
     this.nodes = this.createNodes(data);
     const links = this.createLinks(data, this.nodes);
 
+    // Set initial positions near center to avoid clustering in corner
+    const width = this.svgElement.nativeElement.clientWidth;
+    const height = this.svgElement.nativeElement.clientHeight;
+    this.nodes.forEach((node, i) => {
+      const angle = (i / this.nodes.length) * 2 * Math.PI;
+      const radius = Math.min(width, height) / 4;
+      node.x = width / 2 + radius * Math.cos(angle);
+      node.y = height / 2 + radius * Math.sin(angle);
+    });
+
     this.renderLinks(links);
     this.renderNodes(this.nodes);
     this.setupSimulation(this.nodes, links);
+
+    // Set initial zoom level after nodes are positioned
+    const initialScale = Math.min(window.innerWidth, window.innerHeight) / 5000;
+    const clampedScale = Math.max(0.1, Math.min(0.3, initialScale));
+
+    // Center the view on the graph center
+    // The nodes are positioned around (width/2, height/2), so we need to translate accordingly
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const translateX = width / 2 - clampedScale * centerX;
+    const translateY = height / 2 - clampedScale * centerY;
+
+    const initialTransform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(clampedScale);
+
+    this.svg.call(this.zoom.transform, initialTransform);
   }
 
   private createNodes(data: FullGraph): GraphNode[] {
@@ -378,7 +436,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   onSidebarServiceClick(serviceId: string): void {
-    // Find and focus on the service
+    // Find and focus on the service with the same zoom level as clicking on service card
     const node = this.nodes.find(n => n.id === serviceId);
     if (node) {
       this.focusOnNode(node);
