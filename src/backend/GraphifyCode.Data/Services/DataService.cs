@@ -1,4 +1,5 @@
 ﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Models;
 using GraphifyCode.Data.Settings;
 using Microsoft.Extensions.Options;
 using System;
@@ -37,7 +38,7 @@ public class DataService(IOptions<MarkdownStorageSettings> options) : IDataServi
                 var markdown = await File.ReadAllTextAsync(servicePath, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(markdown))
                 {
-                    var originalService = Service.FromMarkdown(markdown);
+                    var originalService = Entities.Service.FromMarkdown(markdown);
                     var service = new Models.Service()
                     {
                         Id = originalService.Id,
@@ -98,7 +99,7 @@ public class DataService(IOptions<MarkdownStorageSettings> options) : IDataServi
 
             Directory.CreateDirectory(serviceDir);
 
-            var service = new Service
+            var service = new Entities.Service
             {
                 Id = id,
                 Name = name,
@@ -393,16 +394,16 @@ public class DataService(IOptions<MarkdownStorageSettings> options) : IDataServi
         }
     }
 
-    public async Task<Models.UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken)
+    public async Task<UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken)
     {
         var usecasesDir = Path.Combine(_settings.Path, serviceId.ToString(), USECASES_DIR_NAME);
         if (!Directory.Exists(usecasesDir))
         {
-            return new Models.UseCases { UseCaseList = [] };
+            return new UseCases { UseCaseList = [] };
         }
 
         var usecaseFiles = Directory.GetFiles(usecasesDir, "*.md");
-        var usecases = new List<Models.UseCaseSummary>();
+        var usecases = new List<UseCaseSummary>();
 
         foreach (var usecaseFile in usecaseFiles)
         {
@@ -410,7 +411,7 @@ public class DataService(IOptions<MarkdownStorageSettings> options) : IDataServi
             if (!string.IsNullOrWhiteSpace(markdown))
             {
                 var useCase = UseCase.FromMarkdown(markdown);
-                var summary = new Models.UseCaseSummary
+                var summary = new UseCaseSummary
                 {
                     Id = useCase.Id,
                     Name = useCase.Name,
@@ -423,7 +424,7 @@ public class DataService(IOptions<MarkdownStorageSettings> options) : IDataServi
             }
         }
 
-        return new Models.UseCases { UseCaseList = [.. usecases] };
+        return new UseCases { UseCaseList = [.. usecases] };
     }
 
     public async Task<UseCase> GetUseCaseDetails(Guid useCaseId, CancellationToken cancellationToken)
@@ -736,5 +737,83 @@ public class DataService(IOptions<MarkdownStorageSettings> options) : IDataServi
         {
             _semaphore.Release();
         }
+    }
+
+    public async Task<FullGraph> GetFullGraph(CancellationToken cancellationToken)
+    {
+        var serviceDirs = Directory.GetDirectories(_settings.Path);
+        var serviceDataList = new List<FullGraph.ServiceData>();
+
+        foreach (var serviceDir in serviceDirs)
+        {
+            var servicePath = Path.Combine(serviceDir, SERVICE_FILE_NAME);
+            if (!File.Exists(servicePath))
+            {
+                continue;
+            }
+
+            var serviceMarkdown = await File.ReadAllTextAsync(servicePath, cancellationToken);
+            if (string.IsNullOrWhiteSpace(serviceMarkdown))
+            {
+                continue;
+            }
+
+            var service = Entities.Service.FromMarkdown(serviceMarkdown);
+
+            // Read endpoints
+            var endpoints = Array.Empty<Endpoint>();
+            var endpointsPath = Path.Combine(serviceDir, ENDPOINTS_FILE_NAME);
+            if (File.Exists(endpointsPath))
+            {
+                var endpointsMarkdown = await File.ReadAllTextAsync(endpointsPath, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(endpointsMarkdown))
+                {
+                    endpoints = Endpoints.FromMarkdown(endpointsMarkdown).EndpointList;
+                }
+            }
+
+            // Read relations
+            var relations = new Relations { TargetEndpointIds = [] };
+            var relationsPath = Path.Combine(serviceDir, RELATIONS_FILE_NAME);
+            if (File.Exists(relationsPath))
+            {
+                var relationsMarkdown = await File.ReadAllTextAsync(relationsPath, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(relationsMarkdown))
+                {
+                    relations = Relations.FromMarkdown(relationsMarkdown);
+                }
+            }
+
+            // Read use cases
+            var useCases = new List<UseCase>();
+            var usecasesDir = Path.Combine(serviceDir, USECASES_DIR_NAME);
+            if (Directory.Exists(usecasesDir))
+            {
+                var usecaseFiles = Directory.GetFiles(usecasesDir, "*.md");
+                foreach (var usecaseFile in usecaseFiles)
+                {
+                    var usecaseMarkdown = await File.ReadAllTextAsync(usecaseFile, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(usecaseMarkdown))
+                    {
+                        useCases.Add(UseCase.FromMarkdown(usecaseMarkdown));
+                    }
+                }
+            }
+
+            var serviceData = new FullGraph.ServiceData
+            {
+                Service = service,
+                Endpoint = endpoints,
+                Relations = relations,
+                UseCases = [.. useCases]
+            };
+
+            serviceDataList.Add(serviceData);
+        }
+
+        return new FullGraph
+        {
+            Services = [.. serviceDataList]
+        };
     }
 }

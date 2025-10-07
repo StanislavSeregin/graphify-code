@@ -1,4 +1,5 @@
 ﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Models;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ public interface IDataService
 
     Task DeleteRelation(Guid sourceServiceId, Guid targetEndpointId, CancellationToken cancellationToken);
 
-    Task<Models.UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken);
+    Task<UseCases> GetUseCases(Guid serviceId, CancellationToken cancellationToken);
 
     Task<UseCase> GetUseCaseDetails(Guid useCaseId, CancellationToken cancellationToken);
 
@@ -38,4 +39,6 @@ public interface IDataService
     Task DeleteAllSteps(Guid useCaseId, CancellationToken cancellationToken);
 
     Task DeleteUseCase(Guid useCaseId, CancellationToken cancellationToken);
+
+    Task<FullGraph> GetFullGraph(CancellationToken cancellationToken);
 }

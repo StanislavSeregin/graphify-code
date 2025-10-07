@@ -1,3 +1,4 @@
+using GraphifyCode.Data.Entities;
 using GraphifyCode.Data.Services;
 using GraphifyCode.Data.Settings;
 using Microsoft.AspNetCore.Builder;
@@ -5,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -42,39 +44,11 @@ public class Program
 
         app.UseCors();
 
-        // GET /api/services - Get all services
-        app.MapGet("/api/services", async (IDataService dataService, CancellationToken cancellationToken) =>
+        // GET /api/full-graph - Get all data
+        app.MapGet("/api/full-graph", async (IDataService dataService, CancellationToken cancellationToken) =>
         {
-            var services = await dataService.GetServices(cancellationToken);
-            return Results.Ok(services);
-        });
-
-        // GET /api/endpoints/{serviceId} - Get endpoints for a service
-        app.MapGet("/api/endpoints/{serviceId:guid}", async (Guid serviceId, IDataService dataService, CancellationToken cancellationToken) =>
-        {
-            var endpoints = await dataService.GetEndpoints(serviceId, cancellationToken);
-            return Results.Ok(endpoints);
-        });
-
-        // GET /api/relations/{serviceId} - Get relations for a service
-        app.MapGet("/api/relations/{serviceId:guid}", async (Guid serviceId, IDataService dataService, CancellationToken cancellationToken) =>
-        {
-            var relations = await dataService.GetRelations(serviceId, cancellationToken);
-            return Results.Ok(relations);
-        });
-
-        // GET /api/use-cases/{serviceId} - Get use cases for a service
-        app.MapGet("/api/use-cases/{serviceId:guid}", async (Guid serviceId, IDataService dataService, CancellationToken cancellationToken) =>
-        {
-            var useCases = await dataService.GetUseCases(serviceId, cancellationToken);
-            return Results.Ok(useCases);
-        });
-
-        // GET /api/use-case/{useCaseId} - Get use case details
-        app.MapGet("/api/use-case/{useCaseId:guid}", async (Guid useCaseId, IDataService dataService, CancellationToken cancellationToken) =>
-        {
-            var useCase = await dataService.GetUseCaseDetails(useCaseId, cancellationToken);
-            return Results.Ok(useCase);
+            var fullGraph = await dataService.GetFullGraph(cancellationToken);
+            return Results.Ok(fullGraph);
         });
 
         await app.RunAsync();

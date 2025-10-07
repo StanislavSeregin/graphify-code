@@ -1,11 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { GraphService } from './graph.service';
-import { GraphCanvasComponent } from './graph-canvas.component';
 
 @Component({
   selector: 'app-graph',
   standalone: true,
-  imports: [GraphCanvasComponent],
+  imports: [],
   templateUrl: './graph.component.html',
   styleUrl: './graph.component.css'
 })
