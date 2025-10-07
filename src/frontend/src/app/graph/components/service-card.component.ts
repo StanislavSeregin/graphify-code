@@ -43,8 +43,7 @@ export class ServiceCardComponent implements OnInit, OnDestroy {
     this.isDescriptionExpanded = !this.isDescriptionExpanded;
   }
 
-  onFocusClick(event: Event): void {
-    event.stopPropagation();
+  onCardClick(event: Event): void {
     this.focusRequested.emit();
   }
 

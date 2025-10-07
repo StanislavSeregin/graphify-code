@@ -41,9 +41,9 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private localDisplayMode$ = new BehaviorSubject<DisplayMode>('compact');
   private currentScale = 0.2;
 
-  private readonly CARD_WIDTH = 1750;  // 350 * 5 (compensate for 0.2 scale)
-  private readonly CARD_HEIGHT = 350;  // 70 * 5 (compensate for 0.2 scale)
-  private readonly DISPLAY_MODE_THRESHOLD = 0.8;
+  private readonly CARD_WIDTH = 3150;  // 3150px actual width
+  private readonly CARD_HEIGHT = 600;  // 600px actual height
+  private readonly DISPLAY_MODE_THRESHOLD = 0.1;
 
   constructor(
     private appRef: ApplicationRef,
@@ -79,7 +79,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private setupZoom(): void {
     this.zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 2])
+      .scaleExtent([0.05, 2])
       .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
         this.gMain.attr('transform', event.transform.toString());
         this.currentScale = event.transform.k;
@@ -93,8 +93,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.svg.call(this.zoom);
 
-    // Set initial zoom level to 0.15 (15%)
-    const initialTransform = d3.zoomIdentity.scale(0.15);
+    // Set initial zoom level to 0.08 (8%)
+    const initialTransform = d3.zoomIdentity.scale(0.08);
     this.svg.call(this.zoom.transform, initialTransform);
   }
 
@@ -110,7 +110,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const width = this.svgElement.nativeElement.clientWidth;
     const height = this.svgElement.nativeElement.clientHeight;
-    const initialScale = 0.15;
+    const initialScale = 0.08;
 
     // Center point in scaled coordinates
     const centerX = (width / 2) / initialScale;
@@ -158,6 +158,12 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
       d.componentRef = componentRef;
       componentRef.setInput('endpoint', d.endpoint);
       componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
+
+      // Subscribe to focus event
+      componentRef.instance.focusRequested.subscribe(() => {
+        this.focusOnNode(d);
+      });
+
       this.appRef.attachView(componentRef.hostView);
 
       const domElement = componentRef.location.nativeElement;
@@ -172,5 +178,28 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gNodes
       .selectAll<SVGGElement, EndpointNode>('g')
       .attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
+  }
+
+  private focusOnNode(node: EndpointNode): void {
+    const width = this.svgElement.nativeElement.clientWidth;
+    const height = this.svgElement.nativeElement.clientHeight;
+
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
+
+    // Calculate transform to center the node and zoom to full mode
+    // Use a scale higher than DISPLAY_MODE_THRESHOLD (0.1) to trigger full mode
+    const scale = 0.18;
+    const translateX = width / 2 - scale * x;
+    const translateY = height / 2 - scale * y;
+
+    const transform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(scale);
+
+    this.svg
+      .transition()
+      .duration(750)
+      .call(this.zoom.transform, transform);
   }
 }

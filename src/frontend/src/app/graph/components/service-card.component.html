@@ -2,12 +2,8 @@
   [class.compact]="displayMode === 'compact'"
   [class.full]="displayMode === 'full'"
   [class.external]="isExternal"
-  class="service-card">
-
-  <!-- Focus button -->
-  <button mat-icon-button class="focus-button" (click)="onFocusClick($event)" [matTooltip]="'Focus on this service'">
-    <mat-icon>center_focus_strong</mat-icon>
-  </button>
+  class="service-card"
+  (click)="onCardClick($event)">
 
   <!-- Compact mode -->
   <ng-container *ngIf="displayMode === 'compact'">

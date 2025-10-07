@@ -67,7 +67,7 @@ export interface ZoomState {
 export class GraphService {
   private readonly apiUrl = environment.apiUrl;
   private readonly SERVICE_CARD_FULL_THRESHOLD = 1.0;
-  private readonly ENDPOINT_CARD_FULL_THRESHOLD = 3.0;
+  private readonly ENDPOINT_CARD_FULL_THRESHOLD = 0.75;
 
   // Data state
   private graphDataSubject = new BehaviorSubject<FullGraph | null>(null);

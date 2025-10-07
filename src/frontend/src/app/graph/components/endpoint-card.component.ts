@@ -1,23 +1,26 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatButtonModule } from '@angular/material/button';
 import { Endpoint, DisplayMode } from '../graph.service';
 import { Subject, takeUntil, Observable } from 'rxjs';
 
 @Component({
   selector: 'app-endpoint-card',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatIconModule, MatTooltipModule],
+  imports: [CommonModule, MatCardModule, MatIconModule, MatTooltipModule, MatButtonModule],
   templateUrl: './endpoint-card.component.html',
   styleUrl: './endpoint-card.component.css'
 })
 export class EndpointCardComponent implements OnInit, OnDestroy {
   @Input() endpoint!: Endpoint;
   @Input() displayMode$?: Observable<DisplayMode>;
+  @Output() focusRequested = new EventEmitter<void>();
 
   displayMode: DisplayMode = 'compact';
+  isDescriptionExpanded = false;
   private destroy$ = new Subject<void>();
 
   constructor() {}
@@ -37,10 +40,19 @@ export class EndpointCardComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  toggleDescription(event: Event): void {
+    event.stopPropagation();
+    this.isDescriptionExpanded = !this.isDescriptionExpanded;
+  }
+
+  onCardClick(event: Event): void {
+    this.focusRequested.emit();
+  }
+
   get typeIcon(): string {
     switch (this.endpoint.type) {
       case 'http': return 'http';
-      case 'queue': return 'queue';
+      case 'queue': return 'mail';
       case 'job': return 'schedule';
       default: return 'help_outline';
     }

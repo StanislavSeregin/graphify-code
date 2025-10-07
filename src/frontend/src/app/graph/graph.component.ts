@@ -105,7 +105,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     svg.call(this.zoom);
 
     // Set initial zoom level
-    const initialTransform = d3.zoomIdentity.scale(0.6);
+    const initialTransform = d3.zoomIdentity.scale(0.4);
     svg.call(this.zoom.transform, initialTransform);
   }
 
@@ -206,8 +206,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     const x = node.x ?? 0;
     const y = node.y ?? 0;
 
-    // Calculate transform to center the node and zoom to full mode (2.0)
-    const scale = 2.0;
+    // Calculate transform to center the node and zoom to full mode (2.5)
+    const scale = 2.5;
     const translateX = width / 2 - scale * x;
     const translateY = height / 2 - scale * y;
 

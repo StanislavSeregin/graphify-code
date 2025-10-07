@@ -1,6 +1,6 @@
 .endpoint-card {
-  width: 1750px;
-  height: 350px;
+  width: 3150px;
+  height: 600px;
   cursor: pointer;
   box-sizing: border-box;
   background-color: white;
@@ -12,6 +12,7 @@
   flex-direction: column;
   justify-content: center;
   opacity: 1 !important;
+  position: relative;
 }
 
 .endpoint-card:hover {
@@ -80,7 +81,7 @@
 }
 
 .endpoint-card.compact mat-card-title {
-  font-size: 60px;
+  font-size: 80px;
 }
 
 .endpoint-card.full mat-card-title {
@@ -100,14 +101,46 @@
 }
 
 /* Description */
+.description-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+}
+
 .description {
-  font-size: 50px;
-  line-height: 1.3;
+  font-size: 38px;
+  line-height: 1.4;
   margin: 0;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.description.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.expand-button {
+  position: absolute;
+  right: -8px;
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expand-button mat-icon {
+  margin: 0;
+  line-height: 1;
+  font-size: 40px;
+  width: 40px;
+  height: 40px;
 }
 
 /* Code path */
@@ -144,7 +177,7 @@
 
 /* Full mode adjustments */
 .endpoint-card.full {
-  width: 2000px;
-  height: 500px;
+  width: 3600px;
+  height: 850px;
   justify-content: flex-start;
 }
