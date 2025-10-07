@@ -114,17 +114,17 @@ export interface EndpointSidebarData {
 
     .sidebar-title h2 {
       margin: 0;
-      font-size: 16px;
-      font-weight: 500;
+      font-size: 18px;
+      font-weight: 600;
       color: #ffffff;
-      opacity: 0.9;
     }
 
     .sidebar-title h3 {
       margin: 6px 0 0 0;
-      font-size: 18px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 500;
       color: #ffffff;
+      opacity: 0.9;
     }
 
     .sidebar-header button {
@@ -221,7 +221,7 @@ export interface EndpointSidebarData {
     }
 
     .clickable-item {
-      cursor: pointer;
+      cursor: pointer !important;
       transition: all 0.2s;
       border-radius: 4px;
       margin: 4px 0;
@@ -230,6 +230,11 @@ export interface EndpointSidebarData {
     .clickable-item:hover {
       background-color: #e3f2fd !important;
       transform: translateX(4px);
+      cursor: pointer !important;
+    }
+
+    .clickable-item * {
+      cursor: pointer !important;
     }
 
     .empty-message {
@@ -266,6 +271,15 @@ export interface EndpointSidebarData {
       white-space: normal !important;
       line-height: 1.4 !important;
       padding: 4px 0 !important;
+    }
+
+    /* Ensure content doesn't overflow sidebar */
+    :host {
+      display: block;
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
     }
   `]
 })

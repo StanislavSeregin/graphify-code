@@ -1,11 +1,11 @@
 .endpoint-card {
-  width: 3150px;
-  height: 600px;
+  width: clamp(1800px, 120vw, 3000px);
+  height: clamp(400px, 36vh, 800px);
   cursor: pointer;
   box-sizing: border-box;
   background-color: white;
-  border: 10px solid rgba(0, 0, 0, 0.2);
-  border-radius: 20px;
+  border: clamp(3px, 0.4vw, 10px) solid rgba(0, 0, 0, 0.2);
+  border-radius: clamp(6px, 0.6vw, 20px);
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -22,7 +22,7 @@
 
 /* Remove default Material padding and ensure proper sizing */
 :host ::ng-deep mat-card {
-  padding: 50px 60px !important;
+  padding: clamp(16px, 2vw, 50px) clamp(20px, 2.5vw, 60px) !important;
   width: 100% !important;
   height: 100% !important;
   box-sizing: border-box !important;
@@ -32,7 +32,7 @@
 }
 
 :host ::ng-deep .mat-mdc-card {
-  padding: 50px 60px !important;
+  padding: clamp(16px, 2vw, 50px) clamp(20px, 2.5vw, 60px) !important;
   width: 100% !important;
   height: 100% !important;
   box-sizing: border-box !important;
@@ -45,7 +45,7 @@
 .endpoint-card mat-card-header {
   display: flex;
   align-items: center;
-  gap: 40px;
+  gap: clamp(12px, 1.5vw, 40px);
   padding: 0 !important;
   margin: 0 !important;
   width: 100%;
@@ -53,17 +53,17 @@
 
 /* Icon */
 .endpoint-card mat-icon[mat-card-avatar] {
-  width: 90px;
-  height: 90px;
-  font-size: 90px;
+  width: clamp(32px, 3vw, 90px);
+  height: clamp(32px, 3vw, 90px);
+  font-size: clamp(32px, 3vw, 90px);
   margin: 0;
   flex-shrink: 0;
 }
 
 .endpoint-card.full mat-icon[mat-card-avatar] {
-  width: 90px;
-  height: 90px;
-  font-size: 90px;
+  width: clamp(32px, 3vw, 90px);
+  height: clamp(32px, 3vw, 90px);
+  font-size: clamp(32px, 3vw, 90px);
 }
 
 /* Title */
@@ -81,22 +81,22 @@
 }
 
 .endpoint-card.compact mat-card-title {
-  font-size: 80px;
+  font-size: clamp(24px, 2.5vw, 80px);
 }
 
 .endpoint-card.full mat-card-title {
-  font-size: 55px;
+  font-size: clamp(18px, 2vw, 55px);
 }
 
 /* Content */
 .endpoint-card mat-card-content {
-  padding: 30px 0 0 0 !important;
+  padding: clamp(12px, 1.2vw, 30px) 0 0 0 !important;
   margin: 0 !important;
   color: rgba(0, 0, 0, 0.87);
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: clamp(12px, 1.2vw, 30px);
   overflow: hidden;
 }
 
@@ -107,7 +107,7 @@
 }
 
 .description {
-  font-size: 38px;
+  font-size: clamp(12px, 1.2vw, 38px);
   line-height: 1.4;
   margin: 0;
   overflow: hidden;
@@ -147,19 +147,19 @@
 .code-path {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: clamp(8px, 0.8vw, 20px);
   margin: 0;
   color: rgba(0, 0, 0, 0.6);
-  font-size: 40px;
+  font-size: clamp(12px, 1.2vw, 40px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .code-path mat-icon {
-  font-size: 50px;
-  width: 50px;
-  height: 50px;
+  font-size: clamp(16px, 1.6vw, 50px);
+  width: clamp(16px, 1.6vw, 50px);
+  height: clamp(16px, 1.6vw, 50px);
   flex-shrink: 0;
   color: rgba(0, 0, 0, 0.54);
 }
@@ -177,7 +177,7 @@
 
 /* Full mode adjustments */
 .endpoint-card.full {
-  width: 3600px;
-  height: 850px;
+  width: clamp(2100px, 135vw, 3600px);
+  height: clamp(600px, 50vh, 1000px);
   justify-content: flex-start;
 }

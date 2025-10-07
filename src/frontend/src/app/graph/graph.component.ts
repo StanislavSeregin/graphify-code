@@ -43,8 +43,15 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   endpointSidebarOpen = false;
   endpointSidebarData: EndpointSidebarData | null = null;
 
-  private readonly CARD_WIDTH = 700;
-  private readonly CARD_HEIGHT = 500;
+  private getCardWidth(): number {
+    const vw = window.innerWidth;
+    return Math.min(Math.max(500, vw * 0.30), 700);
+  }
+
+  private getCardHeight(): number {
+    const vh = window.innerHeight;
+    return Math.min(Math.max(400, vh * 0.25), 500);
+  }
 
   constructor(
     private graphService: GraphService,
@@ -82,6 +89,21 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
           this.renderGraph(data);
         }
       });
+
+    // Handle window resize
+    window.addEventListener('resize', () => this.onWindowResize());
+  }
+
+  private onWindowResize(): void {
+    if (this.simulation) {
+      const width = this.svgElement.nativeElement.clientWidth;
+      const height = this.svgElement.nativeElement.clientHeight;
+      this.simulation.force('center', d3.forceCenter(width / 2, height / 2));
+      this.simulation.force('collision', d3.forceCollide<GraphNode>()
+        .radius(Math.max(this.getCardWidth(), this.getCardHeight()) / 2 + 150)
+        .strength(1));
+      this.simulation.alpha(0.3).restart();
+    }
   }
 
   ngOnDestroy(): void {
@@ -97,6 +119,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
         node.componentRef.destroy();
       }
     });
+    // Remove resize listener
+    window.removeEventListener('resize', () => this.onWindowResize());
   }
 
   private initSvg(): void {
@@ -126,8 +150,10 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     svg.call(this.zoom);
 
-    // Set initial zoom level
-    const initialTransform = d3.zoomIdentity.scale(0.4);
+    // Set initial zoom level based on viewport
+    const initialScale = Math.min(window.innerWidth, window.innerHeight) / 5000;
+    const clampedScale = Math.max(0.1, Math.min(0.3, initialScale));
+    const initialTransform = d3.zoomIdentity.scale(clampedScale);
     svg.call(this.zoom.transform, initialTransform);
   }
 
@@ -185,16 +211,22 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     const width = this.svgElement.nativeElement.clientWidth;
     const height = this.svgElement.nativeElement.clientHeight;
 
+    // Calculate forces based on viewport
+    const avgDimension = (width + height) / 2;
+    const linkDistance = Math.max(400, avgDimension * 0.3);
+    const chargeStrength = -Math.max(800, avgDimension * 0.4);
+    const collisionPadding = Math.max(50, avgDimension * 0.05);
+
     this.simulation = d3.forceSimulation<GraphNode, GraphLink>(nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(links)
         .id(d => d.id)
-        .distance(900)
+        .distance(linkDistance)
         .strength(0.5))
       .force('charge', d3.forceManyBody()
-        .strength(-1200))
+        .strength(chargeStrength))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<GraphNode>()
-        .radius(Math.max(this.CARD_WIDTH, this.CARD_HEIGHT) / 2 + 150)
+        .radius(Math.max(this.getCardWidth(), this.getCardHeight()) / 2 + collisionPadding)
         .strength(1))
       .on('tick', () => this.onTick());
   }
@@ -279,11 +311,13 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       const group = d3.select(groups[i]);
 
       // Create foreignObject for HTML insertion
+      const cardWidth = this.getCardWidth();
+      const cardHeight = this.getCardHeight();
       const foreignObject = group.append('foreignObject')
-        .attr('width', this.CARD_WIDTH)
-        .attr('height', this.CARD_HEIGHT)
-        .attr('x', -this.CARD_WIDTH / 2)
-        .attr('y', -this.CARD_HEIGHT / 2);
+        .attr('width', cardWidth)
+        .attr('height', cardHeight)
+        .attr('x', -cardWidth / 2)
+        .attr('y', -cardHeight / 2);
 
       // Create Angular component dynamically
       const componentRef = createComponent(ServiceCardComponent, {

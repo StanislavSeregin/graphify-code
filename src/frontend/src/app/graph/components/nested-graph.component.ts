@@ -42,9 +42,17 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private localDisplayMode$ = new BehaviorSubject<DisplayMode>('compact');
   private currentScale = 0.2;
 
-  private readonly CARD_WIDTH = 3150;  // 3150px actual width
-  private readonly CARD_HEIGHT = 600;  // 600px actual height
   private readonly DISPLAY_MODE_THRESHOLD = 0.1;
+
+  private getCardWidth(): number {
+    const vw = window.innerWidth;
+    return Math.min(Math.max(1800, vw * 1.20), 3000);
+  }
+
+  private getCardHeight(): number {
+    const vh = window.innerHeight;
+    return Math.min(Math.max(400, vh * 0.36), 800);
+  }
 
   constructor(
     private appRef: ApplicationRef,
@@ -57,6 +65,28 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initSvg();
     this.setupZoom();
     this.renderEndpoints();
+
+    // Handle window resize
+    window.addEventListener('resize', () => this.onWindowResize());
+  }
+
+  private onWindowResize(): void {
+    // Redraw cards with new dimensions
+    if (this.nodes.length > 0) {
+      this.updateCardSizes();
+    }
+  }
+
+  private updateCardSizes(): void {
+    const cardWidth = this.getCardWidth();
+    const cardHeight = this.getCardHeight();
+
+    this.gNodes.selectAll<SVGGElement, EndpointNode>('g')
+      .select('foreignObject')
+      .attr('width', cardWidth)
+      .attr('height', cardHeight)
+      .attr('x', -cardWidth / 2)
+      .attr('y', -cardHeight / 2);
   }
 
   ngOnDestroy(): void {
@@ -70,6 +100,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
     this.localDisplayMode$.complete();
+    // Remove resize listener
+    window.removeEventListener('resize', () => this.onWindowResize());
   }
 
   private initSvg(): void {
@@ -94,8 +126,10 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.svg.call(this.zoom);
 
-    // Set initial zoom level to 0.08 (8%)
-    const initialTransform = d3.zoomIdentity.scale(0.08);
+    // Set initial zoom level based on viewport - reduced for wider cards
+    const baseScale = Math.min(window.innerWidth, window.innerHeight) / 15000;
+    const initialScale = Math.max(0.025, Math.min(0.08, baseScale));
+    const initialTransform = d3.zoomIdentity.scale(initialScale);
     this.svg.call(this.zoom.transform, initialTransform);
   }
 
@@ -111,16 +145,17 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const width = this.svgElement.nativeElement.clientWidth;
     const height = this.svgElement.nativeElement.clientHeight;
-    const initialScale = 0.08;
+    const initialScale = Math.max(0.025, Math.min(0.08, Math.min(window.innerWidth, window.innerHeight) / 15000));
 
     // Center point in scaled coordinates
     const centerX = (width / 2) / initialScale;
     const centerY = (height / 2) / initialScale;
 
     // Simple vertical layout with tight spacing
-    const spacing = this.CARD_HEIGHT + 100; // Small gap between cards
+    const cardHeight = this.getCardHeight();
+    const spacing = cardHeight + Math.min(100, window.innerHeight * 0.05); // Small gap between cards
     const totalHeight = this.nodes.length * spacing;
-    const startY = centerY - totalHeight / 2 + this.CARD_HEIGHT / 2;
+    const startY = centerY - totalHeight / 2 + cardHeight / 2;
 
     this.nodes.forEach((node, i) => {
       node.x = centerX;
@@ -131,7 +166,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     console.log('Nested graph setup:', {
       width, height, centerX, centerY,
-      cardWidth: this.CARD_WIDTH,
+      cardWidth: this.getCardWidth(),
+      cardHeight: this.getCardHeight(),
       spacing,
       nodeCount: this.nodes.length
     });
@@ -146,11 +182,13 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     nodeSelection.each((d, i, groups) => {
       const group = d3.select(groups[i]);
 
+      const cardWidth = this.getCardWidth();
+      const cardHeight = this.getCardHeight();
       const foreignObject = group.append('foreignObject')
-        .attr('width', this.CARD_WIDTH)
-        .attr('height', this.CARD_HEIGHT)
-        .attr('x', -this.CARD_WIDTH / 2)
-        .attr('y', -this.CARD_HEIGHT / 2);
+        .attr('width', cardWidth)
+        .attr('height', cardHeight)
+        .attr('x', -cardWidth / 2)
+        .attr('y', -cardHeight / 2);
 
       const componentRef = createComponent(EndpointCardComponent, {
         environmentInjector: this.injector
