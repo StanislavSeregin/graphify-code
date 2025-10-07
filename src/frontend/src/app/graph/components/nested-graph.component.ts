@@ -1,0 +1,176 @@
+import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { EndpointCardComponent } from './endpoint-card.component';
+import { Endpoint, DisplayMode } from '../graph.service';
+import * as d3 from 'd3';
+import { BehaviorSubject } from 'rxjs';
+
+interface EndpointNode extends d3.SimulationNodeDatum {
+  id: string;
+  endpoint: Endpoint;
+  componentRef?: any;
+}
+
+@Component({
+  selector: 'app-nested-graph',
+  standalone: true,
+  imports: [CommonModule],
+  template: `<svg #nestedSvg class="nested-svg"></svg>`,
+  styles: [`
+    :host {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .nested-svg {
+      width: 100%;
+      height: 100%;
+    }
+  `]
+})
+export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('nestedSvg', { static: false }) svgElement!: ElementRef<SVGSVGElement>;
+  @Input() endpoints: Endpoint[] = [];
+
+  private svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
+  private gMain!: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private gNodes!: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private simulation!: d3.Simulation<EndpointNode, undefined>;
+  private nodes: EndpointNode[] = [];
+  private zoom!: d3.ZoomBehavior<SVGSVGElement, unknown>;
+  private localDisplayMode$ = new BehaviorSubject<DisplayMode>('compact');
+  private currentScale = 0.2;
+
+  private readonly CARD_WIDTH = 1750;  // 350 * 5 (compensate for 0.2 scale)
+  private readonly CARD_HEIGHT = 350;  // 70 * 5 (compensate for 0.2 scale)
+  private readonly DISPLAY_MODE_THRESHOLD = 0.8;
+
+  constructor(
+    private appRef: ApplicationRef,
+    private injector: EnvironmentInjector
+  ) {}
+
+  ngOnInit(): void {}
+
+  ngAfterViewInit(): void {
+    this.initSvg();
+    this.setupZoom();
+    this.renderEndpoints();
+  }
+
+  ngOnDestroy(): void {
+    if (this.simulation) {
+      this.simulation.stop();
+    }
+    this.nodes.forEach(node => {
+      if (node.componentRef) {
+        this.appRef.detachView(node.componentRef.hostView);
+        node.componentRef.destroy();
+      }
+    });
+    this.localDisplayMode$.complete();
+  }
+
+  private initSvg(): void {
+    this.svg = d3.select(this.svgElement.nativeElement);
+    this.gMain = this.svg.append('g').attr('class', 'nested-main');
+    this.gNodes = this.gMain.append('g').attr('class', 'nested-nodes');
+  }
+
+  private setupZoom(): void {
+    this.zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 2])
+      .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        this.gMain.attr('transform', event.transform.toString());
+        this.currentScale = event.transform.k;
+
+        // Update local display mode based on zoom scale
+        const newMode: DisplayMode = this.currentScale >= this.DISPLAY_MODE_THRESHOLD ? 'full' : 'compact';
+        if (this.localDisplayMode$.value !== newMode) {
+          this.localDisplayMode$.next(newMode);
+        }
+      });
+
+    this.svg.call(this.zoom);
+
+    // Set initial zoom level to 0.15 (15%)
+    const initialTransform = d3.zoomIdentity.scale(0.15);
+    this.svg.call(this.zoom.transform, initialTransform);
+  }
+
+  private renderEndpoints(): void {
+    if (!this.endpoints || this.endpoints.length === 0) {
+      return;
+    }
+
+    this.nodes = this.endpoints.map(endpoint => ({
+      id: endpoint.id,
+      endpoint: endpoint
+    }));
+
+    const width = this.svgElement.nativeElement.clientWidth;
+    const height = this.svgElement.nativeElement.clientHeight;
+    const initialScale = 0.15;
+
+    // Center point in scaled coordinates
+    const centerX = (width / 2) / initialScale;
+    const centerY = (height / 2) / initialScale;
+
+    // Simple vertical layout with tight spacing
+    const spacing = this.CARD_HEIGHT + 100; // Small gap between cards
+    const totalHeight = this.nodes.length * spacing;
+    const startY = centerY - totalHeight / 2 + this.CARD_HEIGHT / 2;
+
+    this.nodes.forEach((node, i) => {
+      node.x = centerX;
+      node.y = startY + i * spacing;
+      node.fx = node.x;
+      node.fy = node.y;
+    });
+
+    console.log('Nested graph setup:', {
+      width, height, centerX, centerY,
+      cardWidth: this.CARD_WIDTH,
+      spacing,
+      nodeCount: this.nodes.length
+    });
+
+    // Render nodes
+    const nodeSelection = this.gNodes
+      .selectAll<SVGGElement, EndpointNode>('g')
+      .data(this.nodes, d => d.id)
+      .join('g')
+      .attr('class', 'endpoint-node');
+
+    nodeSelection.each((d, i, groups) => {
+      const group = d3.select(groups[i]);
+
+      const foreignObject = group.append('foreignObject')
+        .attr('width', this.CARD_WIDTH)
+        .attr('height', this.CARD_HEIGHT)
+        .attr('x', -this.CARD_WIDTH / 2)
+        .attr('y', -this.CARD_HEIGHT / 2);
+
+      const componentRef = createComponent(EndpointCardComponent, {
+        environmentInjector: this.injector
+      });
+
+      d.componentRef = componentRef;
+      componentRef.setInput('endpoint', d.endpoint);
+      componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
+      this.appRef.attachView(componentRef.hostView);
+
+      const domElement = componentRef.location.nativeElement;
+      foreignObject.node()?.appendChild(domElement);
+    });
+
+    // Set initial positions
+    nodeSelection.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
+  }
+
+  private onTick(): void {
+    this.gNodes
+      .selectAll<SVGGElement, EndpointNode>('g')
+      .attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
+  }
+}

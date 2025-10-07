@@ -4,6 +4,11 @@
   [class.external]="isExternal"
   class="service-card">
 
+  <!-- Focus button -->
+  <button mat-icon-button class="focus-button" (click)="onFocusClick($event)" [matTooltip]="'Focus on this service'">
+    <mat-icon>center_focus_strong</mat-icon>
+  </button>
+
   <!-- Compact mode -->
   <ng-container *ngIf="displayMode === 'compact'">
     <mat-card-header>
@@ -45,11 +50,8 @@
         <span>{{ serviceData.service.relativeCodePath }}</span>
       </p>
 
-      <div class="nested-graph-placeholder">
-        <div class="placeholder-content">
-          <mat-icon>account_tree</mat-icon>
-          <span>Nested graph ({{ endpointCount }} endpoints, {{ useCaseCount }} use cases)</span>
-        </div>
+      <div class="nested-graph-container">
+        <app-nested-graph [endpoints]="serviceData.endpoint"></app-nested-graph>
       </div>
     </mat-card-content>
   </ng-container>

@@ -1,21 +1,23 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
 import { ServiceData, GraphService, DisplayMode } from '../graph.service';
+import { NestedGraphComponent } from './nested-graph.component';
 import { Subject, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-service-card',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatIconModule, MatTooltipModule, MatButtonModule],
+  imports: [CommonModule, MatCardModule, MatIconModule, MatTooltipModule, MatButtonModule, NestedGraphComponent],
   templateUrl: './service-card.component.html',
   styleUrl: './service-card.component.css'
 })
 export class ServiceCardComponent implements OnInit, OnDestroy {
   @Input() serviceData!: ServiceData;
+  @Output() focusRequested = new EventEmitter<void>();
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;
@@ -39,6 +41,11 @@ export class ServiceCardComponent implements OnInit, OnDestroy {
   toggleDescription(event: Event): void {
     event.stopPropagation();
     this.isDescriptionExpanded = !this.isDescriptionExpanded;
+  }
+
+  onFocusClick(event: Event): void {
+    event.stopPropagation();
+    this.focusRequested.emit();
   }
 
   get isExternal(): boolean {

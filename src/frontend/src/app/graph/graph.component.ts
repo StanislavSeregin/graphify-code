@@ -36,8 +36,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private linkSelection!: d3.Selection<SVGPathElement, GraphLink, SVGGElement, unknown>;
   private nodeSelection!: d3.Selection<SVGGElement, GraphNode, SVGGElement, unknown>;
 
-  private readonly CARD_WIDTH = 400;
-  private readonly CARD_HEIGHT = 300;
+  private readonly CARD_WIDTH = 700;
+  private readonly CARD_HEIGHT = 500;
 
   constructor(
     private graphService: GraphService,
@@ -96,7 +96,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     const graphService = this.graphService;
 
     this.zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 4])
+      .scaleExtent([0.1, 10])
       .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
         gMain.attr('transform', event.transform.toString());
         graphService.updateZoom(event.transform);
@@ -166,14 +166,14 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.simulation = d3.forceSimulation<GraphNode, GraphLink>(nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(links)
         .id(d => d.id)
-        .distance(500)
+        .distance(900)
         .strength(0.5))
       .force('charge', d3.forceManyBody()
-        .strength(-500))
+        .strength(-1200))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<GraphNode>()
-        .radius(Math.max(this.CARD_WIDTH, this.CARD_HEIGHT) / 2 + 50)
-        .strength(0.8))
+        .radius(Math.max(this.CARD_WIDTH, this.CARD_HEIGHT) / 2 + 150)
+        .strength(1))
       .on('tick', () => this.onTick());
   }
 
@@ -199,6 +199,28 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  private focusOnNode(node: GraphNode): void {
+    const width = this.svgElement.nativeElement.clientWidth;
+    const height = this.svgElement.nativeElement.clientHeight;
+
+    const x = node.x ?? 0;
+    const y = node.y ?? 0;
+
+    // Calculate transform to center the node and zoom to full mode (2.0)
+    const scale = 2.0;
+    const translateX = width / 2 - scale * x;
+    const translateY = height / 2 - scale * y;
+
+    const transform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(scale);
+
+    this.svg
+      .transition()
+      .duration(750)
+      .call(this.zoom.transform, transform);
+  }
+
   private renderLinks(links: GraphLink[]): void {
     this.linkSelection = this.gLinks
       .selectAll<SVGPathElement, GraphLink>('path')
@@ -206,7 +228,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       .join('path')
       .attr('stroke', '#B0B0B0')
       .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', 2)
+      .attr('stroke-width', 6)
       .attr('fill', 'none')
       .attr('pointer-events', 'none')
       .attr('class', 'link')
@@ -251,6 +273,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Set input data
       componentRef.setInput('serviceData', d.serviceData);
+
+      // Subscribe to focus event
+      componentRef.instance.focusRequested.subscribe(() => {
+        this.focusOnNode(d);
+      });
 
       // Attach component to ApplicationRef for change detection
       this.appRef.attachView(componentRef.hostView);

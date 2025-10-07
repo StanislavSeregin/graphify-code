@@ -1,12 +1,43 @@
 .service-card {
-  width: 400px;
-  height: 300px;
+  width: 700px;
+  height: 500px;
   cursor: pointer;
   box-sizing: border-box;
   background-color: white;
   border: 3px solid rgba(0, 0, 0, 0.3);
   border-left: 5px solid #4A90E2;
   border-radius: 4px;
+  position: relative;
+}
+
+/* Focus button */
+.focus-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.focus-button mat-icon {
+  margin: 0;
+  line-height: 1;
+}
+
+.service-card.full .focus-button {
+  width: 20px;
+  height: 20px;
+}
+
+.service-card.full .focus-button mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Regular service styles */
@@ -38,7 +69,7 @@
 }
 
 .service-card.compact mat-card-title {
-  font-size: 32px;
+  font-size: 56px;
 }
 
 .service-card.full mat-card-title {
@@ -55,7 +86,7 @@
 }
 
 .service-card.compact mat-card-subtitle {
-  font-size: 20px;
+  font-size: 36px;
   margin-top: 16px;
 }
 
@@ -157,38 +188,14 @@
   white-space: nowrap;
 }
 
-/* Nested graph placeholder */
-.nested-graph-placeholder {
-  height: 120px;
-  border: 2px dashed rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Nested graph container */
+.nested-graph-container {
+  width: 100%;
+  height: 350px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
   background-color: rgba(0, 0, 0, 0.02);
-}
-
-.placeholder-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: rgba(0, 0, 0, 0.6);
-  text-align: center;
-}
-
-.service-card.full .placeholder-content {
-  font-size: 8px;
-}
-
-.placeholder-content mat-icon {
-  color: rgba(0, 0, 0, 0.38);
-}
-
-.service-card.full .placeholder-content mat-icon {
-  font-size: 16px;
-  width: 16px;
-  height: 16px;
+  overflow: hidden;
 }
 
 /* Compact mode - center content */
