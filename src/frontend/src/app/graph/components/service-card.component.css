@@ -2,24 +2,21 @@
   width: 400px;
   height: 300px;
   cursor: pointer;
-  transition: box-shadow 0.3s ease;
   box-sizing: border-box;
-}
-
-.service-card:hover {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  background-color: white;
+  border: 3px solid rgba(0, 0, 0, 0.3);
+  border-left: 5px solid #4A90E2;
+  border-radius: 4px;
 }
 
 /* Regular service styles */
 .service-card:not(.external) {
-  background-color: #4A90E2;
-  color: white;
+  border-left-color: #4A90E2;
 }
 
 /* External service styles */
 .service-card.external {
-  background-color: #95A5A6;
-  color: white;
+  border-left-color: #95A5A6;
 }
 
 /* External service icon */
@@ -27,13 +24,13 @@
   width: 24px;
   height: 24px;
   font-size: 24px;
-  color: white;
+  color: #95A5A6;
 }
 
 /* Title */
 .service-card mat-card-title {
-  color: white;
-  font-weight: bold;
+  color: rgba(0, 0, 0, 0.87);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -45,12 +42,12 @@
 }
 
 .service-card.full mat-card-title {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 /* Subtitle */
 .service-card mat-card-subtitle {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(0, 0, 0, 0.6);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -58,32 +55,73 @@
 }
 
 .service-card.compact mat-card-subtitle {
-  font-size: 24px;
-  margin-top: 24px;
+  font-size: 20px;
+  margin-top: 16px;
 }
 
 .service-card.full mat-card-subtitle {
-  font-size: 14px;
+  font-size: 10px;
 }
 
 /* Full mode content */
 .service-card mat-card-content {
-  color: white;
+  color: rgba(0, 0, 0, 0.87);
   padding-top: 16px;
 }
 
 /* Description */
+.description-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+}
+
 .description {
   line-height: 1.4;
-  margin: 0 0 12px 0;
+  margin: 0;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.description.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
 }
 
 .service-card.full .description {
-  font-size: 13px;
+  font-size: 9px;
+}
+
+.expand-button {
+  position: absolute;
+  right: -8px;
+  top: -20px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expand-button mat-icon {
+  margin: 0;
+  line-height: 1;
+}
+
+.service-card.full .expand-button {
+  width: 20px;
+  height: 20px;
+  top: -16px;
+}
+
+.service-card.full .expand-button mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Code path */
@@ -92,24 +130,25 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 16px 0;
-  opacity: 0.9;
+  color: rgba(0, 0, 0, 0.6);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .service-card.full .code-path {
-  font-size: 12px;
+  font-size: 8px;
 }
 
 .code-path mat-icon {
   flex-shrink: 0;
+  color: rgba(0, 0, 0, 0.54);
 }
 
 .service-card.full .code-path mat-icon {
-  font-size: 16px;
-  width: 16px;
-  height: 16px;
+  font-size: 10px;
+  width: 10px;
+  height: 10px;
 }
 
 .code-path span {
@@ -121,12 +160,12 @@
 /* Nested graph placeholder */
 .nested-graph-placeholder {
   height: 120px;
-  border: 2px dashed rgba(255, 255, 255, 0.5);
+  border: 2px dashed rgba(0, 0, 0, 0.2);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.02);
 }
 
 .placeholder-content {
@@ -134,22 +173,22 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(0, 0, 0, 0.6);
   text-align: center;
 }
 
 .service-card.full .placeholder-content {
-  font-size: 12px;
+  font-size: 8px;
 }
 
 .placeholder-content mat-icon {
-  opacity: 0.6;
+  color: rgba(0, 0, 0, 0.38);
 }
 
 .service-card.full .placeholder-content mat-icon {
-  font-size: 32px;
-  width: 32px;
-  height: 32px;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Compact mode - center content */
@@ -165,4 +204,12 @@
 /* Full mode - default layout */
 .service-card.full mat-card-header {
   text-align: left;
+}
+
+/* Tooltip styles */
+::ng-deep .mat-mdc-tooltip .mdc-tooltip__surface {
+  font-size: 14px !important;
+  max-width: 400px !important;
+  padding: 12px 16px !important;
+  line-height: 1.5 !important;
 }

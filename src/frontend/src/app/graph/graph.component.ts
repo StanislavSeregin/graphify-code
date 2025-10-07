@@ -33,6 +33,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private simulation!: d3.Simulation<GraphNode, GraphLink>;
   private zoom!: d3.ZoomBehavior<SVGSVGElement, unknown>;
   private nodes: GraphNode[] = [];
+  private linkSelection!: d3.Selection<SVGPathElement, GraphLink, SVGGElement, unknown>;
+  private nodeSelection!: d3.Selection<SVGGElement, GraphNode, SVGGElement, unknown>;
 
   private readonly CARD_WIDTH = 400;
   private readonly CARD_HEIGHT = 300;
@@ -101,15 +103,19 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       });
 
     svg.call(this.zoom);
+
+    // Set initial zoom level
+    const initialTransform = d3.zoomIdentity.scale(0.6);
+    svg.call(this.zoom.transform, initialTransform);
   }
 
   private renderGraph(data: FullGraph): void {
     this.nodes = this.createNodes(data);
     const links = this.createLinks(data, this.nodes);
 
-    this.setupSimulation(this.nodes, links);
     this.renderLinks(links);
     this.renderNodes(this.nodes);
+    this.setupSimulation(this.nodes, links);
   }
 
   private createNodes(data: FullGraph): GraphNode[] {
@@ -160,43 +166,72 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.simulation = d3.forceSimulation<GraphNode, GraphLink>(nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(links)
         .id(d => d.id)
-        .distance(500)       // Increase distance for linked nodes
-        .strength(0.5))      // Reduce link strength for more flexibility
+        .distance(500)
+        .strength(0.5))
       .force('charge', d3.forceManyBody()
-        .strength(-500))     // Reduce repulsion to allow unlinked nodes closer
+        .strength(-500))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<GraphNode>()
-        .radius(Math.max(this.CARD_WIDTH, this.CARD_HEIGHT) / 2 + 50)  // Increase padding
-        .strength(0.8));     // Strong collision to prevent overlap
+        .radius(Math.max(this.CARD_WIDTH, this.CARD_HEIGHT) / 2 + 50)
+        .strength(0.8))
+      .on('tick', () => this.onTick());
+  }
+
+  private onTick(): void {
+    // Update links
+    if (this.linkSelection) {
+      this.linkSelection.attr('d', d => {
+        const source = d.source as GraphNode;
+        const target = d.target as GraphNode;
+
+        const sx = source.x ?? 0;
+        const sy = source.y ?? 0;
+        const tx = target.x ?? 0;
+        const ty = target.y ?? 0;
+
+        return `M ${sx},${sy} L ${tx},${ty}`;
+      });
+    }
+
+    // Update nodes
+    if (this.nodeSelection) {
+      this.nodeSelection.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
+    }
   }
 
   private renderLinks(links: GraphLink[]): void {
-    const linkSelection = this.gLinks
-      .selectAll<SVGLineElement, GraphLink>('line')
+    this.linkSelection = this.gLinks
+      .selectAll<SVGPathElement, GraphLink>('path')
       .data(links)
-      .join('line')
-      .attr('stroke', '#666')
+      .join('path')
+      .attr('stroke', '#B0B0B0')
       .attr('stroke-opacity', 0.6)
-      .attr('stroke-width', 2);
-
-    this.simulation.on('tick', () => {
-      linkSelection
-        .attr('x1', d => (d.source as GraphNode).x ?? 0)
-        .attr('y1', d => (d.source as GraphNode).y ?? 0)
-        .attr('x2', d => (d.target as GraphNode).x ?? 0)
-        .attr('y2', d => (d.target as GraphNode).y ?? 0);
-    });
+      .attr('stroke-width', 2)
+      .attr('fill', 'none')
+      .attr('pointer-events', 'none')
+      .attr('class', 'link')
+      .attr('marker-end', 'url(#arrow)');
   }
 
   private renderNodes(nodes: GraphNode[]): void {
-    const nodeSelection = this.gNodes
+    this.nodeSelection = this.gNodes
       .selectAll<SVGGElement, GraphNode>('g')
       .data(nodes, d => d.id)
       .join('g')
-      .attr('class', 'node');
+      .attr('class', 'node')
+      .attr('filter', 'url(#card-shadow)');
+
+    // Add hover effect for shadow
+    this.nodeSelection
+      .on('mouseenter', function() {
+        d3.select(this).attr('filter', 'url(#card-shadow-hover)');
+      })
+      .on('mouseleave', function() {
+        d3.select(this).attr('filter', 'url(#card-shadow)');
+      });
 
     // Render Angular components via foreignObject
-    nodeSelection.each((d, i, groups) => {
+    this.nodeSelection.each((d, i, groups) => {
       const group = d3.select(groups[i]);
 
       // Create foreignObject for HTML insertion
@@ -223,10 +258,6 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       // Insert component DOM element into foreignObject
       const domElement = componentRef.location.nativeElement;
       foreignObject.node()?.appendChild(domElement);
-    });
-
-    this.simulation.on('tick', () => {
-      nodeSelection.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
   }
 }

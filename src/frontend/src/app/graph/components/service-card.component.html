@@ -27,9 +27,18 @@
     </mat-card-header>
 
     <mat-card-content>
-      <p class="description" [matTooltip]="serviceData.service.description">
-        {{ serviceData.service.description }}
-      </p>
+      <div class="description-wrapper">
+        <p class="description" [class.expanded]="isDescriptionExpanded" (click)="toggleDescription($event)">
+          {{ serviceData.service.description }}
+        </p>
+        <button
+          *ngIf="serviceData.service.description && serviceData.service.description.length > 100"
+          class="expand-button"
+          (click)="toggleDescription($event)"
+          mat-icon-button>
+          <mat-icon>{{ isDescriptionExpanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </button>
+      </div>
 
       <p class="code-path" *ngIf="serviceData.service.relativeCodePath" [matTooltip]="serviceData.service.relativeCodePath">
         <mat-icon>code</mat-icon>
