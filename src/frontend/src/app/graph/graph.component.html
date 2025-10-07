@@ -1,41 +1,56 @@
-<div class="graph-container">
-  <svg #graphSvg>
-    <defs>
-      <!-- Shadows -->
-      <filter id="card-shadow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
-        <feOffset dx="0" dy="4" result="offsetblur"/>
-        <feComponentTransfer>
-          <feFuncA type="linear" slope="0.2"/>
-        </feComponentTransfer>
-        <feMerge>
-          <feMergeNode/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-      <filter id="card-shadow-hover" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
-        <feOffset dx="0" dy="8" result="offsetblur"/>
-        <feComponentTransfer>
-          <feFuncA type="linear" slope="0.25"/>
-        </feComponentTransfer>
-        <feMerge>
-          <feMergeNode/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
+<mat-sidenav-container class="graph-sidenav-container">
+  <!-- Right sidebar for endpoint details -->
+  <mat-sidenav #endpointSidenav position="end" mode="side" [opened]="endpointSidebarOpen" [disableClose]="true">
+    <app-endpoint-sidebar
+      [data]="endpointSidebarData"
+      (close)="closeEndpointSidebar()"
+      (serviceClick)="onSidebarServiceClick($event)"
+      (useCaseClick)="onSidebarUseCaseClick($event)">
+    </app-endpoint-sidebar>
+  </mat-sidenav>
 
-      <!-- Arrow marker -->
-      <marker
-        id="arrow"
-        viewBox="0 0 10 10"
-        refX="9"
-        refY="5"
-        markerWidth="6"
-        markerHeight="6"
-        orient="auto">
-        <path d="M 0 0 L 10 5 L 0 10 z" fill="#4A90E2" />
-      </marker>
-    </defs>
-  </svg>
-</div>
+  <!-- Main content -->
+  <mat-sidenav-content>
+    <div class="graph-container">
+      <svg #graphSvg>
+        <defs>
+          <!-- Shadows -->
+          <filter id="card-shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+            <feOffset dx="0" dy="4" result="offsetblur"/>
+            <feComponentTransfer>
+              <feFuncA type="linear" slope="0.2"/>
+            </feComponentTransfer>
+            <feMerge>
+              <feMergeNode/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <filter id="card-shadow-hover" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+            <feOffset dx="0" dy="8" result="offsetblur"/>
+            <feComponentTransfer>
+              <feFuncA type="linear" slope="0.25"/>
+            </feComponentTransfer>
+            <feMerge>
+              <feMergeNode/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+
+          <!-- Arrow marker -->
+          <marker
+            id="arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4A90E2" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

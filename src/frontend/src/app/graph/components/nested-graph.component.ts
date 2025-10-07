@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { EndpointCardComponent } from './endpoint-card.component';
 import { Endpoint, DisplayMode } from '../graph.service';
@@ -29,8 +29,9 @@ interface EndpointNode extends d3.SimulationNodeDatum {
   `]
 })
 export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('nestedSvg', { static: false }) svgElement!: ElementRef<SVGSVGElement>;
+  @ViewChild('nestedSvg', { static: false}) svgElement!: ElementRef<SVGSVGElement>;
   @Input() endpoints: Endpoint[] = [];
+  @Output() endpointClick = new EventEmitter<Endpoint>();
 
   private svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
   private gMain!: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -159,8 +160,9 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
       componentRef.setInput('endpoint', d.endpoint);
       componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
 
-      // Subscribe to focus event
+      // Subscribe to focus event - emit endpoint click for sidebar AND focus
       componentRef.instance.focusRequested.subscribe(() => {
+        this.endpointClick.emit(d.endpoint);
         this.focusOnNode(d);
       });
 

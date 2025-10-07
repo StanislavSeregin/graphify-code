@@ -1,6 +1,9 @@
 import { Component, OnInit, ViewChild, ElementRef, AfterViewInit, OnDestroy, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
 import { GraphService, FullGraph, ServiceData, DisplayMode } from './graph.service';
+import { SidebarService } from './services/sidebar.service';
 import { ServiceCardComponent } from './components/service-card.component';
+import { EndpointSidebarComponent, EndpointSidebarData } from './components/endpoint-sidebar.component';
+import { MatSidenavModule } from '@angular/material/sidenav';
 import * as d3 from 'd3';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -18,7 +21,7 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
 @Component({
   selector: 'app-graph',
   standalone: true,
-  imports: [],
+  imports: [MatSidenavModule, EndpointSidebarComponent],
   templateUrl: './graph.component.html',
   styleUrl: './graph.component.css'
 })
@@ -33,20 +36,38 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private simulation!: d3.Simulation<GraphNode, GraphLink>;
   private zoom!: d3.ZoomBehavior<SVGSVGElement, unknown>;
   private nodes: GraphNode[] = [];
+  private fullGraphData: FullGraph | null = null;
   private linkSelection!: d3.Selection<SVGPathElement, GraphLink, SVGGElement, unknown>;
   private nodeSelection!: d3.Selection<SVGGElement, GraphNode, SVGGElement, unknown>;
+
+  endpointSidebarOpen = false;
+  endpointSidebarData: EndpointSidebarData | null = null;
 
   private readonly CARD_WIDTH = 700;
   private readonly CARD_HEIGHT = 500;
 
   constructor(
     private graphService: GraphService,
+    private sidebarService: SidebarService,
     private appRef: ApplicationRef,
     private injector: EnvironmentInjector
   ) {}
 
   ngOnInit(): void {
     this.graphService.init();
+
+    // Subscribe to sidebar state
+    this.sidebarService.endpointSidebarOpen$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(open => {
+        this.endpointSidebarOpen = open;
+      });
+
+    this.sidebarService.endpointSidebarData$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(data => {
+        this.endpointSidebarData = data;
+      });
   }
 
   ngAfterViewInit(): void {
@@ -57,6 +78,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(data => {
         if (data) {
+          this.fullGraphData = data;
           this.renderGraph(data);
         }
       });
@@ -279,6 +301,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
         this.focusOnNode(d);
       });
 
+      // Subscribe to endpoint click event
+      componentRef.instance.endpointClick.subscribe((data: {endpoint: any, service: ServiceData}) => {
+        this.onEndpointClick(data.endpoint, data.service);
+      });
+
       // Attach component to ApplicationRef for change detection
       this.appRef.attachView(componentRef.hostView);
 
@@ -286,5 +313,46 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       const domElement = componentRef.location.nativeElement;
       foreignObject.node()?.appendChild(domElement);
     });
+  }
+
+  // Sidebar methods
+  closeEndpointSidebar(): void {
+    this.sidebarService.closeEndpointSidebar();
+  }
+
+  onEndpointClick(endpoint: any, service: ServiceData): void {
+    if (!this.fullGraphData) return;
+
+    // Find related services (services that call this endpoint)
+    const relatedServices = this.fullGraphData.services.filter(s =>
+      s.relations.targetEndpointIds.includes(endpoint.id)
+    );
+
+    // Find use cases where this endpoint is involved
+    const useCases = service.useCases.filter(uc =>
+      uc.initiatingEndpointId === endpoint.id ||
+      uc.steps.some(step => step.endpointId === endpoint.id)
+    );
+
+    // Open sidebar with data
+    this.sidebarService.openEndpointSidebar({
+      endpoint,
+      service,
+      relatedServices,
+      useCases
+    });
+  }
+
+  onSidebarServiceClick(serviceId: string): void {
+    // Find and focus on the service
+    const node = this.nodes.find(n => n.id === serviceId);
+    if (node) {
+      this.focusOnNode(node);
+    }
+  }
+
+  onSidebarUseCaseClick(useCaseId: string): void {
+    // TODO: Implement use case sidebar and navigation
+    console.log('Use case clicked:', useCaseId);
   }
 }

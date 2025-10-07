@@ -47,7 +47,10 @@
       </p>
 
       <div class="nested-graph-container">
-        <app-nested-graph [endpoints]="serviceData.endpoint"></app-nested-graph>
+        <app-nested-graph
+          [endpoints]="serviceData.endpoint"
+          (endpointClick)="onEndpointClick($event)">
+        </app-nested-graph>
       </div>
     </mat-card-content>
   </ng-container>

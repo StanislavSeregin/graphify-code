@@ -4,7 +4,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
-import { ServiceData, GraphService, DisplayMode } from '../graph.service';
+import { ServiceData, GraphService, DisplayMode, Endpoint } from '../graph.service';
 import { NestedGraphComponent } from './nested-graph.component';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -18,6 +18,7 @@ import { Subject, takeUntil } from 'rxjs';
 export class ServiceCardComponent implements OnInit, OnDestroy {
   @Input() serviceData!: ServiceData;
   @Output() focusRequested = new EventEmitter<void>();
+  @Output() endpointClick = new EventEmitter<{endpoint: Endpoint, service: ServiceData}>();
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;
@@ -45,6 +46,10 @@ export class ServiceCardComponent implements OnInit, OnDestroy {
 
   onCardClick(event: Event): void {
     this.focusRequested.emit();
+  }
+
+  onEndpointClick(endpoint: Endpoint): void {
+    this.endpointClick.emit({endpoint, service: this.serviceData});
   }
 
   get isExternal(): boolean {
