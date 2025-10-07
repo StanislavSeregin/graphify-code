@@ -1,0 +1,47 @@
+<mat-card
+  [class.compact]="displayMode === 'compact'"
+  [class.full]="displayMode === 'full'"
+  [class.external]="isExternal"
+  class="service-card">
+
+  <!-- Compact mode -->
+  <ng-container *ngIf="displayMode === 'compact'">
+    <mat-card-header>
+      <mat-icon *ngIf="isExternal" mat-card-avatar>link</mat-icon>
+      <mat-card-title [matTooltip]="serviceData.service.name">
+        {{ serviceData.service.name }}
+      </mat-card-title>
+      <mat-card-subtitle>
+        {{ endpointCount }} endpoints, {{ useCaseCount }} use cases
+      </mat-card-subtitle>
+    </mat-card-header>
+  </ng-container>
+
+  <!-- Full mode -->
+  <ng-container *ngIf="displayMode === 'full'">
+    <mat-card-header>
+      <mat-icon *ngIf="isExternal" mat-card-avatar>link</mat-icon>
+      <mat-card-title [matTooltip]="serviceData.service.name">
+        {{ serviceData.service.name }}
+      </mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      <p class="description" [matTooltip]="serviceData.service.description">
+        {{ serviceData.service.description }}
+      </p>
+
+      <p class="code-path" *ngIf="serviceData.service.relativeCodePath" [matTooltip]="serviceData.service.relativeCodePath">
+        <mat-icon>code</mat-icon>
+        <span>{{ serviceData.service.relativeCodePath }}</span>
+      </p>
+
+      <div class="nested-graph-placeholder">
+        <div class="placeholder-content">
+          <mat-icon>account_tree</mat-icon>
+          <span>Nested graph ({{ endpointCount }} endpoints, {{ useCaseCount }} use cases)</span>
+        </div>
+      </div>
+    </mat-card-content>
+  </ng-container>
+</mat-card>

@@ -1,108 +1,61 @@
-# GraphifyCode UI Vision & Implementation Plan
+# GraphifyCode UI - Техническое задание
 
-## Overview
-
-Zoom-based interactive graph visualization with Level of Detail (LOD) rendering. Users can explore the entire system architecture from high-level service overview to detailed endpoint-level connections through intuitive zoom and focus interactions.
-
----
-
-## Core Concepts
-
-### 1. Zoom-based Level of Detail (LOD)
-
-The graph adapts its visualization based on zoom level:
-
-| Zoom Level | Range | Display |
-|------------|-------|---------|
-| **Far** | 0.1x - 0.5x | Service icons, names, simplified connections |
-| **Medium** | 0.5x - 1.5x | Service cards with metadata, endpoint count badges |
-| **Close** | 1.5x - 4.0x | Service containers with endpoint nodes inside, detailed connections |
-
-### 2. Hierarchical Node Structure
-
-```
-┌─────────────────────────────────────────┐
-│  Service A                              │
-│  Description: API Gateway               │
-│                                         │
-│  ┌──────────┐  ┌──────────┐           │
-│  │ POST     │  │ GET      │           │──────┐
-│  │ /login   │  │ /profile │           │      │
-│  └──────────┘  └──────────┘           │      │
-│                                         │      │
-│  ┌──────────┐                          │      │
-│  │ DELETE   │                          │      │
-│  │ /logout  │                          │      │
-│  └──────────┘                          │      │
-└─────────────────────────────────────────┘      │
-                                                 │
-                                                 ├──→ Service B
-                                                 │    (specific endpoint)
-                                                 │
-                                                 └──→ Service C
-                                                      (specific endpoint)
-```
-
-### 3. Interactive States
-
-#### Idle State
-- All nodes visible with normal opacity (1.0)
-- All connections visible with normal opacity (0.6)
-- Hovering shows highlights
-
-#### Service Focus
-- **Clicked service**: opacity 1.0, highlighted border
-- **Connected services**: opacity 1.0
-- **Connections to/from service**: opacity 0.8
-- **Unrelated nodes**: opacity 0.2
-- **Unrelated connections**: opacity 0.1
-
-#### Endpoint Focus (at close zoom)
-- **Clicked endpoint**: opacity 1.0, highlighted
-- **Parent service**: highlighted container
-- **Target endpoint(s)**: opacity 1.0, highlighted
-- **Target service(s)**: highlighted container
-- **Related connections**: opacity 0.8
-- **Unrelated nodes**: opacity 0.2
+## Оглавление
+1. [Общая концепция](#общая-концепция)
+2. [Используемые технологии](#используемые-технологии)
+3. [Структура данных](#структура-данных)
+4. [Компоненты UI](#компоненты-ui)
+5. [Режимы отображения](#режимы-отображения)
+6. [Логика навигации и взаимодействия](#логика-навигации-и-взаимодействия)
+7. [Детали реализации](#детали-реализации)
+8. [Технические требования](#технические-требования)
 
 ---
 
-## Technical Architecture
+## Общая концепция
 
-### Data Structure
+GraphifyCode визуализирует архитектуру системы в виде интерактивного графа сервисов с поддержкой масштабирования, фокусировки и детального изучения связей между компонентами.
 
-**Backend API Types** (from `graph.service.ts`):
+### Ключевые принципы
+- **Граф сервисов** — основное рабочее пространство с визуализацией связей
+- **Режимы отображения** — автоматическое переключение между компактным и полным режимом при масштабировании
+- **Контекстная навигация** — сайдбары с деталями для глубокого изучения эндпоинтов и юзкейсов
+- **Фокусировка** — центрирование камеры с активацией элемента для изоляции контекста
+
+---
+
+## Используемые технологии
+
+- **Angular Material** — UI компоненты (сайдбары, кнопки, иконки)
+- **D3.js** — рендеринг графа, force simulation, zoom/pan управление
+- **TypeScript** — строгая типизация для всех структур данных
+
+---
+
+## Структура данных
+
+### API типы (из `graph.service.ts`)
 
 ```typescript
-// Core entities from API
 type Service = {
   id: string;
   name: string;
   description: string;
   lastAnalyzedAt: string;
-  relativeCodePath: string | null;
+  relativeCodePath: string | null; // null = внешний сервис
 };
 
 type Endpoint = {
   id: string;
   name: string;
   description: string;
-  type: string;
+  type: 'http' | 'queue' | 'job'; // строго типизированные значения
   lastAnalyzedAt: string;
   relativeCodePath: string | null;
 };
 
 type Relations = {
-  targetEndpointIds: string[];
-};
-
-type UseCase = {
-  id: string;
-  name: string;
-  description: string;
-  initiatingEndpointId: string;
-  lastAnalyzedAt: string;
-  steps: UseCaseStep[];
+  targetEndpointIds: string[]; // ID эндпоинтов, в которые данный сервис интегрируется
 };
 
 type UseCaseStep = {
@@ -111,6 +64,15 @@ type UseCaseStep = {
   serviceId: string | null;
   endpointId: string | null;
   relativeCodePath: string | null;
+};
+
+type UseCase = {
+  id: string;
+  name: string;
+  description: string;
+  initiatingEndpointId: string; // Эндпоинт, с которого начинается юзкейс
+  lastAnalyzedAt: string;
+  steps: UseCaseStep[];
 };
 
 type ServiceData = {
@@ -125,492 +87,463 @@ type FullGraph = {
 };
 ```
 
-**UI/Canvas Types** (for rendering):
+### Интерпретация Relations
+`Relations.targetEndpointIds` содержит ID эндпоинтов из других сервисов, в которые **данный сервис** делает запросы. Это позволяет строить связи **service-to-service** (не endpoint-to-endpoint между разными сервисами).
+
+---
+
+## Компоненты UI
+
+### 1. Сервис (Service Node)
+
+Компонент сервиса — контейнер, содержащий эндпоинты и юзкейсы.
+
+#### Два режима отображения
+
+| Режим | Условие | Отображение |
+|-------|---------|-------------|
+| **Компактный** | Зум < порог (определяется эмпирически) | Заголовок + краткая сводка |
+| **Полный** | Зум ≥ порог | Заголовок + описание + путь + вложенный граф |
+
+#### Структура компонента (компактный режим)
+- **Название**: Строка текста (заголовок), отображается полностью
+- **Краткая сводка**: "N эндпоинтов, M юзкейсов" (подзаголовок)
+- **Признак внешнего сервиса**: Если `relativeCodePath === null`
+  - Отдельная цветовая дифференциация
+  - Возможна иконка перед названием (например, 🔗)
+
+#### Структура компонента (полный режим)
+- **Название**: Строка текста (заголовок)
+- **Описание**: Текстовое поле с описанием сервиса
+- **Путь до исходника**: `relativeCodePath` (если не null)
+- **Вложенный граф**: Контейнер для рендеринга эндпоинтов и юзкейсов
+  - Используется собственный layout-алгоритм (force-directed или аналогичный)
+  - Изолирован от внешнего графа сервисов
+  - Эндпоинты и юзкейсы визуально связаны линиями
+
+#### Интерактивность
+- **Клик**: Активирует сервис (деактивирует остальные), переводит фокус камеры
+- **Ховер**: Подсветка, курсор pointer
+
+---
+
+### 2. Эндпоинт (Endpoint Node)
+
+Эндпоинт — элемент внутри сервиса, представляющий точку интеграции.
+
+#### Два режима отображения
+
+| Режим | Отображение |
+|-------|-------------|
+| **Компактный** | Иконка типа + название |
+| **Полный** | Иконка типа + название + описание + путь до исходника |
+
+#### Структура компонента
+- **Тип эндпоинта**: `'http' | 'queue' | 'job'`
+  - Отображается как **иконка перед названием**
+  - Цветовая дифференциация (например, HTTP = синий, Queue = оранжевый, Job = зелёный)
+- **Название**: Строка текста (заголовок), отображается полностью
+- **Описание**: (только полный режим) Текстовое поле
+- **Путь до исходника**: (только полный режим) `relativeCodePath`
+
+#### Интерактивность
+- **Клик**: Открывает **правый сайдбар** с деталями эндпоинта
+- **Ховер**: Подсветка
+
+---
+
+### 3. Юзкейс (Use Case Node)
+
+Юзкейс — сценарий использования, начинающийся с определённого эндпоинта.
+
+#### Два режима отображения
+
+| Режим | Отображение |
+|-------|-------------|
+| **Компактный** | Название + краткая сводка |
+| **Полный** | Название + описание + краткая сводка |
+
+#### Структура компонента
+- **Название**: Строка текста (заголовок)
+- **Краткая сводка**: "N шагов" (подзаголовок)
+- **Описание**: (только полный режим) Текстовое поле
+- **Визуальная связь**: Линия, соединяющая юзкейс с `initiatingEndpointId`
+
+#### Принадлежность сервису
+Юзкейс принадлежит сервису, в котором находится эндпоинт с ID = `initiatingEndpointId`.
+
+#### Интерактивность
+- **Клик**: Открывает **левый сайдбар** с шагами юзкейса
+- **Ховер**: Подсветка
+
+---
+
+### 4. Сайдбар связанных сущностей с эндпоинтом (правый)
+
+Отображает детали эндпоинта и связанные с ним сервисы/юзкейсы.
+
+#### Структура
+- **Заголовок**: "Сервис: [ServiceName] / Эндпоинт: [EndpointName]"
+- **Блок связанных сервисов**:
+  - Заголовок: "Связанные сервисы"
+  - Список сервисов, которые **вызывают** этот эндпоинт (по Relations)
+  - Каждый сервис — кликабельный элемент
+  - При клике: активация сервиса на графе + перевод фокуса
+- **Блок юзкейсов**:
+  - Заголовок: "Юзкейсы"
+  - Список юзкейсов, в которых эндпоинт участвует (по `UseCaseStep.endpointId`)
+  - При клике: активация юзкейса на графе + открытие левого сайдбара с активацией шага
+
+#### Закрытие
+Кнопка "×" или стандартное средство Angular Material Sidenav.
+
+#### Позиция
+Справа (Angular Material Sidenav с `position="end"`).
+
+---
+
+### 5. Сайдбар шагов юзкейса (левый)
+
+Отображает шаги выбранного юзкейса.
+
+#### Структура
+- **Заголовок**: "Сервис: [ServiceName] / Юзкейс: [UseCaseName]"
+- **Список шагов** (гармошка, accordion):
+  - Каждый шаг — элемент гармошки
+  - При клике на шаг:
+    - Раскрывается (остальные схлопываются)
+    - Активируется связанный сервис/эндпоинт (по приоритету, см. ниже)
+
+#### Закрытие
+Кнопка "×" или стандартное средство Angular Material Sidenav.
+
+#### Позиция
+Слева (Angular Material Sidenav с `position="start"`).
+
+---
+
+### 6. Шаг юзкейса (элемент гармошки)
+
+#### Структура
+- **Название**: Строка текста (заголовок)
+- **Описание**: Текстовое поле
+- **Путь до исходника**: `relativeCodePath`
+
+#### Интерактивность
+- **Клик**:
+  - Раскрывает шаг (схлопывает остальные)
+  - Активирует связанный элемент на графе по приоритету:
+    1. Если `endpointId !== null` → навигация к эндпоинту (активация родительского сервиса + подсветка эндпоинта)
+    2. Иначе, если `serviceId !== null` → навигация к сервису
+    3. Иначе → ничего (шаг без привязки к графу)
+  - Переводит фокус камеры на активированный элемент
+
+---
+
+## Режимы отображения
+
+### Компактный vs Полный
+
+Переключение режима происходит **автоматически** при масштабировании графа.
+
+| Режим | Триггер | Сервис | Эндпоинт | Юзкейс |
+|-------|---------|--------|----------|--------|
+| **Компактный** | Зум < порог | Название + сводка | Иконка + название | Название + сводка |
+| **Полный** | Зум ≥ порог | Название + описание + путь + вложенный граф | Иконка + название + описание + путь | Название + описание + сводка |
+
+### Глобальная подписка на режим
+
+Все компоненты подписываются на **Observable<DisplayMode>**, который эмитит значение `'compact' | 'full'` при изменении зума.
 
 ```typescript
-interface GraphNode {
-  id: string;
-  type: 'service';
-  name: string;
-  description: string;
-  sourceData: ServiceData; // Reference to original data
+// Сервис для управления режимом
+export class DisplayModeService {
+  private zoomScale$ = new BehaviorSubject<number>(1);
 
-  // Visual properties
-  x?: number;
-  y?: number;
-  width: number;
-  height: number;
+  displayMode$ = this.zoomScale$.pipe(
+    map(scale => scale >= ZOOM_THRESHOLD ? 'full' : 'compact')
+  );
 
-  // Children endpoints
-  endpoints: EndpointNode[];
-
-  // Layout
-  endpointLayout: 'grid' | 'vertical-list';
-}
-
-interface EndpointNode {
-  id: string;
-  type: 'endpoint';
-  name: string;
-  description: string;
-  endpointType: string; // 'http', 'queue', 'job'
-  parentServiceId: string;
-
-  // Position relative to parent
-  relativeX: number;
-  relativeY: number;
-
-  // Visual
-  width: number;
-  height: number;
-}
-
-interface GraphLink {
-  id: string;
-  source: string; // service ID or endpoint ID
-  target: string; // service ID or endpoint ID
-  type: 'service-to-service' | 'endpoint-to-endpoint';
-
-  // For endpoint-to-endpoint, we need to know parent services
-  sourceServiceId?: string;
-  targetServiceId?: string;
-}
-```
-
-### Rendering Strategy
-
-#### LOD Manager
-```typescript
-class LODManager {
-  getCurrentLevel(zoomScale: number): 'far' | 'medium' | 'close' {
-    if (zoomScale < 0.5) return 'far';
-    if (zoomScale < 1.5) return 'medium';
-    return 'close';
-  }
-
-  shouldShowEndpoints(zoomScale: number): boolean {
-    return zoomScale >= 1.5;
-  }
-
-  shouldShowDetailedLabels(zoomScale: number): boolean {
-    return zoomScale >= 1.0;
-  }
-
-  getNodeDetailLevel(zoomScale: number): 'minimal' | 'standard' | 'detailed' {
-    if (zoomScale < 0.5) return 'minimal';
-    if (zoomScale < 1.5) return 'standard';
-    return 'detailed';
+  updateZoom(scale: number): void {
+    this.zoomScale$.next(scale);
   }
 }
 ```
 
----
-
-## Implementation Plan
-
-### Phase 1: Refactor Current Structure
-**Goal**: Prepare codebase for hierarchical rendering
-
-#### Task 1.1: Update Data Models
-- [ ] Add `EndpointNode` interface
-- [ ] Update `GraphNode` to include `endpoints: EndpointNode[]`
-- [ ] Update `GraphLink` to support endpoint-level connections
-- [ ] Add layout calculation properties (`width`, `height`, positions)
-
-#### Task 1.2: Create LOD Manager Service
-- [ ] Create `lod-manager.service.ts`
-- [ ] Implement zoom level detection
-- [ ] Implement visibility rules per zoom level
-- [ ] Add configuration for zoom thresholds
-
-#### Task 1.3: Refactor Data Preparation
-- [ ] Update `prepareGraphData()` to create `EndpointNode` objects
-- [ ] Calculate endpoint positions relative to parent service
-- [ ] Create endpoint-to-endpoint links (not just service-to-service)
-- [ ] Implement endpoint layout algorithm (grid or vertical list)
+Порог `ZOOM_THRESHOLD` определяется эмпирически в процессе разработки.
 
 ---
 
-### Phase 2: Implement Service Container Rendering
-**Goal**: Render services as containers with dynamic sizing
+## Логика навигации и взаимодействия
 
-#### Task 2.1: Service Container Visual
-- [ ] Replace circles with rounded rectangles for services
-- [ ] Calculate service container size based on endpoint count
-- [ ] Add service header section (name, description)
-- [ ] Add service body section (endpoint container area)
-- [ ] Style service borders and backgrounds
+### Активация сервиса
 
-#### Task 2.2: Service Metadata Display
-- [ ] Add endpoint count badge (visible at medium+ zoom)
-- [ ] Add last analyzed timestamp
-- [ ] Add service type indicator (if applicable)
-- [ ] Add description tooltip/text
+**Правило**: В каждый момент времени активен **один** сервис (или все, если не было фокусировки).
 
-#### Task 2.3: Dynamic Sizing
-- [ ] Calculate min/max container sizes
-- [ ] Implement padding and spacing constants
-- [ ] Update force simulation to use rectangular collision
-- [ ] Adjust node positioning logic
+- **По умолчанию**: Все сервисы активны (opacity 1.0)
+- **При клике на сервис**:
+  - Активируется выбранный сервис
+  - Остальные визуально деактивируются (opacity 0.2-0.3)
+  - Камера центрируется на активном сервисе
+- **При навигации через сайдбары** (клик на элемент в списке):
+  - Активируется целевой сервис
+  - Камера переводит фокус на него
 
----
+### Фокус камеры
 
-### Phase 3: Implement Endpoint Rendering
-**Goal**: Render endpoints inside service containers at close zoom
+**Фокус** = центрирование камеры (d3.zoom transform) + активация элемента.
 
-#### Task 3.1: Endpoint Layout Algorithm
-- [ ] Implement grid layout (for many endpoints)
-- [ ] Implement vertical list layout (for few endpoints)
-- [ ] Calculate endpoint positions within parent container
-- [ ] Handle overflow (scrollable? collapse?)
+При навигации:
+1. Плавная анимация перемещения камеры (d3 transition)
+2. Масштабирование (если необходимо) для оптимального просмотра
+3. Активация целевого элемента (сервис/эндпоинт)
 
-#### Task 3.2: Endpoint Visual Components
-- [ ] Create endpoint node SVG elements (small rectangles)
-- [ ] Add HTTP method indicator (color-coded badges: GET=green, POST=blue, DELETE=red, etc.)
-- [ ] Add endpoint name/path labels
-- [ ] Add endpoint hover effects
-- [ ] Style based on endpoint type
+### Сайдбары
 
-#### Task 3.3: Conditional Rendering by Zoom
-- [ ] Show/hide endpoints based on zoom level (>= 1.5x)
-- [ ] Smooth transitions when endpoints appear/disappear
-- [ ] Update container sizes dynamically
-- [ ] Handle force simulation restart when structure changes
+#### Открытие
+- **Правый**: Клик на эндпоинт → открывается сайдбар с деталями эндпоинта
+- **Левый**: Клик на юзкейс → открывается сайдбар с шагами юзкейса
 
----
+#### Одновременная работа
+Оба сайдбара **могут быть открыты одновременно**. Это позволяет:
+- Просматривать шаги юзкейса (левый)
+- Одновременно изучать детали эндпоинта (правый)
 
-### Phase 4: Implement Detailed Connection Rendering
-**Goal**: Show endpoint-to-endpoint connections at close zoom
+#### Закрытие
+**Только явное закрытие** через кнопку "×" или стандартный элемент управления.
 
-#### Task 4.1: Connection Data Preparation
-- [ ] Parse `relations.targetEndpointIds` to find source endpoints
-- [ ] Create endpoint-to-endpoint links
-- [ ] Store both service-level and endpoint-level connections
-- [ ] Map endpoint IDs to their parent service IDs
+**Не закрывать автоматически** при клике в пустоту — это может привести к потере контекста.
 
-#### Task 4.2: Multi-level Link Rendering
-- [ ] Render service-to-service links (far/medium zoom)
-- [ ] Render endpoint-to-endpoint links (close zoom)
-- [ ] Calculate connection points:
-  - From: endpoint position (absolute = parent.x + relative.x)
-  - To: target endpoint position
-- [ ] Handle links crossing service boundaries
+### Приоритет навигации для UseCaseStep
 
-#### Task 4.3: Visual Link Differentiation
-- [ ] Different stroke styles for service vs endpoint links
-- [ ] Arrow markers sized appropriately per zoom
-- [ ] Link labels (optional, at very close zoom)
-- [ ] Curved paths for better readability
+При клике на шаг юзкейса:
+1. Если `endpointId !== null` → навигация к эндпоинту
+2. Иначе, если `serviceId !== null` → навигация к сервису
+3. Иначе → ничего (шаг без привязки)
+
+**Навигация к эндпоинту** означает:
+- Активация родительского сервиса
+- Перевод фокуса камеры на сервис
+- Подсветка конкретного эндпоинта внутри сервиса
 
 ---
 
-### Phase 5: Implement Zoom-based LOD System
-**Goal**: Dynamic rendering based on zoom level
+## Детали реализации
 
-#### Task 5.1: Zoom Event Integration
-- [ ] Listen to d3.zoom transform events
-- [ ] Track current zoom scale in component
-- [ ] Trigger LOD updates on zoom change
-- [ ] Add debouncing to prevent excessive re-renders
+### Граф сервисов (основной канвас)
 
-#### Task 5.2: LOD Rendering Logic
-- [ ] **Far zoom (0.1-0.5x)**:
-  - Show service icons/simple shapes
-  - Show service names only
-  - Show simplified service-to-service links
-  - Hide all endpoints
-  - Hide detailed metadata
+#### Рендеринг
+- **D3.js Force Simulation** для размещения сервисов
+- Сервисы отталкиваются друг от друга (charge force)
+- Связи создают притяжение (link force)
+- Collision detection по размеру контейнера сервиса
 
-- [ ] **Medium zoom (0.5-1.5x)**:
-  - Show service containers (collapsed)
-  - Show endpoint count badges
-  - Show service descriptions
-  - Show service-to-service links
-  - Hide individual endpoints
+#### Связи между сервисами
+- **Тип**: Service-to-Service (не endpoint-to-endpoint между разными сервисами)
+- **Источник данных**: `Relations.targetEndpointIds` → определить сервисы, которым принадлежат эти эндпоинты
+- **Визуализация**: Линии (можно использовать d3.linkHorizontal или кастомные кривые)
+- **Стиль**: Без направления (стрелок), всегда видимые
 
-- [ ] **Close zoom (1.5-4.0x)**:
-  - Show expanded service containers
-  - Render all endpoint nodes inside
-  - Show endpoint-to-endpoint links
-  - Show all detailed labels
-  - Show full metadata
+#### Управление
+- **Масштабирование**: d3.zoom, поддержка колеса мыши, touch жестов
+- **Панорамирование**: Drag канваса
+- **Запрет перетаскивания**: Нельзя перетаскивать отдельные сервисы (только панорамирование всего графа)
 
-#### Task 5.3: Smooth Transitions
-- [ ] CSS/D3 transitions for opacity changes
-- [ ] Fade in/out for elements appearing/disappearing
-- [ ] Animate container size changes
-- [ ] Smooth link path transitions
+### Вложенный граф внутри сервиса
 
----
+#### Требования
+- Изолирован от внешнего графа (собственная система координат)
+- Эндпоинты и юзкейсы располагаются с помощью layout-алгоритма (например, force-directed)
+- Связи между юзкейсами и эндпоинтами (линии)
 
-### Phase 6: Implement Interactive Focus States
-**Goal**: Highlight relevant nodes and connections on click
+#### Реализация
+Рекомендуется использовать:
+- Отдельный `d3.forceSimulation()` для вложенного графа
+- Или детерминированный layout (hierarchical, grid) для стабильности
 
-#### Task 6.1: State Management
-- [ ] Add focus state tracking:
-  ```typescript
-  focusState: {
-    type: 'none' | 'service' | 'endpoint';
-    targetId: string | null;
-  }
-  ```
-- [ ] Add click handlers for services
-- [ ] Add click handlers for endpoints
-- [ ] Add click handler for canvas (reset focus)
+**Не использовать** список или грид без связей — это противоречит требованию визуализации связей.
 
-#### Task 6.2: Service Focus Logic
-- [ ] On service click:
-  - Set focusState = { type: 'service', targetId: serviceId }
-  - Find all connected services (via relations)
-  - Fade unrelated nodes to opacity 0.2
-  - Highlight focused service
-  - Highlight related connections
-  - Keep connected services at opacity 1.0
+#### Визуальная связь юзкейса с эндпоинтом
+Линия соединяет юзкейс с эндпоинтом, ID которого равен `UseCase.initiatingEndpointId`.
 
-#### Task 6.3: Endpoint Focus Logic
-- [ ] On endpoint click:
-  - Set focusState = { type: 'endpoint', targetId: endpointId }
-  - Find target endpoints from relations
-  - Highlight focused endpoint
-  - Highlight parent service container
-  - Highlight target endpoint(s)
-  - Highlight target service(s)
-  - Highlight connection paths
-  - Fade all unrelated nodes
+### Внешние сервисы
 
-#### Task 6.4: Visual Feedback
-- [ ] Add hover effects (cursor: pointer, slight highlight)
-- [ ] Add selection indicator (border, glow, or background change)
-- [ ] Add tooltips with full information
-- [ ] Add click feedback animation (pulse, scale)
+**Признак**: `Service.relativeCodePath === null`
 
----
+#### Визуальная дифференциация
+- Отдельный цвет (например, серый вместо синего)
+- Возможна иконка перед названием (🔗, или Material Icon `link`)
 
-### Phase 7: Polish & Optimization
+#### Функциональность
+Нет отличий — кликабельны, активируются, участвуют в навигации.
 
-#### Task 7.1: Performance Optimization
-- [ ] Implement node culling (don't render off-screen nodes)
-- [ ] Use D3 data binding efficiently (enter/update/exit)
-- [ ] Optimize force simulation parameters
-- [ ] Consider using Canvas for large graphs (fallback)
-- [ ] Profile and optimize re-render triggers
+### Типы эндпоинтов
 
-#### Task 7.2: Visual Polish
-- [ ] Color scheme refinement
-- [ ] Typography improvements
-- [ ] Icon additions (service types, endpoint methods)
-- [ ] Shadow/depth effects for hierarchy
-- [ ] Smooth animations throughout
+**Значения**: `'http' | 'queue' | 'job'`
 
-#### Task 7.3: Accessibility
-- [ ] Keyboard navigation support
-- [ ] Screen reader labels
-- [ ] High contrast mode support
-- [ ] Focus indicators for keyboard users
+#### Маппинг на иконки и цвета
 
-#### Task 7.4: Responsive Design
-- [ ] Handle window resize gracefully
-- [ ] Adjust layout for different screen sizes
-- [ ] Mobile touch support (if needed)
-- [ ] Test on different resolutions
+| Тип | Иконка (Material Icons) | Цвет |
+|-----|-------------------------|------|
+| `http` | `http` или `api` | Синий (#4A90E2) |
+| `queue` | `queue` или `list` | Оранжевый (#FFA500) |
+| `job` | `work` или `schedule` | Зелёный (#50C878) |
 
----
+Иконка отображается **перед названием** эндпоинта.
 
-## Technical Decisions & Notes
-
-### Force Simulation Considerations
-
-**Hierarchical Force Layout:**
-- Use `d3.forceSimulation()` for service nodes
-- Services repel each other (charge force)
-- Links between services create attraction
-- Endpoints positioned **statically** relative to parent (no separate simulation)
-
-**Collision Detection:**
-- Services use rectangular collision (`d3.forceCollide()` with custom radius function)
-- Calculate collision radius based on container size: `Math.max(width, height) / 2`
-
-### Layout Algorithms
-
-**Endpoint Grid Layout:**
-```
-┌─────────────────────┐
-│  Service            │
-│  ┌────┐ ┌────┐     │
-│  │ EP1│ │ EP2│     │
-│  └────┘ └────┘     │
-│  ┌────┐ ┌────┐     │
-│  │ EP3│ │ EP4│     │
-│  └────┘ └────┘     │
-└─────────────────────┘
-```
-- Grid with 2-3 columns
-- Calculate rows based on endpoint count
-- Fixed endpoint size (e.g., 80x40 px)
-- Padding between endpoints
-
-**Endpoint Vertical List:**
-```
-┌─────────────────────┐
-│  Service            │
-│  ┌────────────────┐ │
-│  │ Endpoint 1     │ │
-│  └────────────────┘ │
-│  ┌────────────────┐ │
-│  │ Endpoint 2     │ │
-│  └────────────────┘ │
-└─────────────────────┘
-```
-- Single column
-- Full-width endpoint cards
-- Better for few endpoints with long names
-
-### Connection Routing
-
-**Service-to-Service Links:**
-- Connect center of service containers
-- Curved paths (d3.linkHorizontal or custom bezier)
-- Arrow at target edge
-
-**Endpoint-to-Endpoint Links:**
-- Connect specific endpoints
-- Calculate absolute positions: `parentService.x + endpoint.relativeX`
-- Ensure links visually exit/enter service containers cleanly
-- Possible to use different line styles (dashed, colored by type)
-
-### Color Coding
-
-**Services:**
-- Default: `#4A90E2` (blue)
-- Focused: `#2E7DD2` (darker blue)
-- Unfocused: `#4A90E2` with opacity 0.2
-
-**Endpoints by HTTP Method:**
-- GET: `#50C878` (green)
-- POST: `#4A90E2` (blue)
-- PUT: `#FFA500` (orange)
-- PATCH: `#FFD700` (gold)
-- DELETE: `#E74C3C` (red)
-- Other: `#95A5A6` (gray)
-
-**Links:**
-- Default: `#666` opacity 0.6
-- Focused: `#333` opacity 0.8
-- Unfocused: `#666` opacity 0.1
-
----
-
-## Example Component Structure (After Implementation)
+### Масштабирование и переключение режимов
 
 ```typescript
-export class GraphCanvasComponent {
-  // LOD
-  private lodManager: LODManager;
-  private currentZoomLevel: number = 1;
+// Пример логики в компоненте графа
+private onZoomChanged(transform: ZoomTransform): void {
+  const scale = transform.k;
+  this.displayModeService.updateZoom(scale);
 
-  // Focus state
-  private focusState = { type: 'none', targetId: null };
+  // Применение transform к SVG группе
+  this.gMain.attr('transform', transform);
+}
+```
 
-  // D3 elements
-  private svg: any;
-  private g: any;
-  private serviceGroups: any;
-  private endpointGroups: any;
-  private links: any;
-  private simulation: any;
+Все компоненты (сервис, эндпоинт, юзкейс) подписываются на `displayMode$` и переключают шаблоны.
 
-  // Methods
-  private initSvg(): void { ... }
-  private setupZoomBehavior(): void { ... }
-  private onZoomChanged(transform: any): void { ... }
+### Активация и фокус
 
-  private renderGraph(): void { ... }
-  private renderServices(nodes: GraphNode[]): void { ... }
-  private renderEndpoints(node: GraphNode): void { ... }
-  private renderLinks(links: GraphLink[]): void { ... }
+```typescript
+// Пример состояния фокуса
+interface FocusState {
+  type: 'none' | 'service' | 'endpoint';
+  targetId: string | null;
+  serviceId?: string; // Для endpoint - ID родительского сервиса
+}
 
-  private updateLOD(zoomScale: number): void { ... }
-  private applyFocusState(): void { ... }
+// Применение фокуса
+private applyFocusState(state: FocusState): void {
+  // Деактивация всех сервисов (opacity 0.2)
+  this.serviceGroups.attr('opacity', 0.2);
 
-  private onServiceClick(node: GraphNode): void { ... }
-  private onEndpointClick(endpoint: EndpointNode): void { ... }
-  private onCanvasClick(): void { ... }
+  if (state.type === 'service') {
+    // Активация целевого сервиса (opacity 1.0)
+    this.serviceGroups
+      .filter((d: any) => d.id === state.targetId)
+      .attr('opacity', 1.0);
 
-  private calculateServiceSize(node: GraphNode): { width: number, height: number } { ... }
-  private calculateEndpointLayout(endpoints: EndpointNode[]): void { ... }
+    // Центрирование камеры
+    this.centerCameraOnService(state.targetId);
+  }
+
+  if (state.type === 'endpoint') {
+    // Активация родительского сервиса
+    this.serviceGroups
+      .filter((d: any) => d.id === state.serviceId)
+      .attr('opacity', 1.0);
+
+    // Подсветка эндпоинта (дополнительная стилизация)
+    this.highlightEndpoint(state.targetId);
+
+    // Центрирование камеры
+    this.centerCameraOnService(state.serviceId);
+  }
 }
 ```
 
 ---
 
-## Testing Strategy
+## Технические требования
 
-### Visual Testing
-- [ ] Test at all zoom levels (0.1x, 0.5x, 1x, 1.5x, 2x, 4x)
-- [ ] Test with 1, 5, 10, 20+ services
-- [ ] Test with services having 1-50 endpoints
-- [ ] Test complex connection graphs
+### Архитектура компонентов
 
-### Interaction Testing
-- [ ] Click on services at different zoom levels
-- [ ] Click on endpoints at close zoom
-- [ ] Click on canvas to deselect
-- [ ] Pan and zoom gestures
-- [ ] Hover effects
+```
+graph/
+├── graph.component.ts          # Основной компонент-контейнер
+├── graph.component.html
+├── graph.component.css
+├── services/
+│   ├── graph.service.ts        # Работа с API (уже существует)
+│   ├── display-mode.service.ts # Управление режимом отображения
+│   └── focus.service.ts        # Управление фокусом и активацией
+├── canvas/
+│   ├── graph-canvas.component.ts   # D3 рендеринг графа
+│   ├── service-node.renderer.ts    # Рендеринг сервисов
+│   ├── endpoint-node.renderer.ts   # Рендеринг эндпоинтов
+│   └── usecase-node.renderer.ts    # Рендеринг юзкейсов
+└── sidebars/
+    ├── endpoint-sidebar.component.ts  # Правый сайдбар
+    └── usecase-sidebar.component.ts   # Левый сайдбар
+```
 
-### Performance Testing
-- [ ] Measure FPS during zoom/pan
-- [ ] Test with large datasets (100+ services)
-- [ ] Profile rendering bottlenecks
-- [ ] Test memory usage over time
+### Зависимости
 
----
+```json
+{
+  "dependencies": {
+    "@angular/material": "^17.x",
+    "@angular/cdk": "^17.x",
+    "d3": "^7.x",
+    "@types/d3": "^7.x"
+  }
+}
+```
 
-## Future Enhancements (Post-MVP)
+### Производительность
 
-- [ ] Use Cases visualization mode
-  - Timeline view of use case steps
-  - Path highlighting on graph
-  - Playback/step-through animation
+- Дебаунсинг зум-событий (100-200ms) для предотвращения избыточных ререндеров
+- Использовать `d3.select().join()` для эффективного обновления DOM
+- Ограничить количество одновременно видимых элементов (viewport culling)
 
-- [ ] Search and filter
-  - Search services by name
-  - Filter by endpoint type
-  - Filter by last analyzed date
+### Доступность
 
-- [ ] Minimap for navigation
-- [ ] Graph layout persistence (save positions)
-- [ ] Multiple layout algorithms (hierarchical, circular, force-directed)
-- [ ] Export to image/PDF
-- [ ] Collaborative features (multi-user viewing)
+- Keyboard navigation (Tab, Enter, Escape)
+- ARIA labels для интерактивных элементов
+- Поддержка screen readers
 
----
+### Тестирование
 
-## Questions & Decisions Log
-
-### Open Questions
-- Should we support more than 2 levels of hierarchy? (e.g., Service > Module > Endpoint)
-- How to handle very large services with 100+ endpoints?
-- Should endpoints be draggable within their parent service?
-- Do we need a search/filter UI component, or is zoom/pan sufficient?
-
-### Resolved Decisions
-- ✅ Use zoom-based LOD instead of mode toggles
-- ✅ Render endpoints inside parent services (not as separate force nodes)
-- ✅ Support both service-level and endpoint-level focus
-- ✅ Defer Use Cases visualization to post-MVP
+- Unit тесты для сервисов (display-mode, focus)
+- Интеграционные тесты для навигации
+- Визуальное тестирование на разных зумах и размерах экрана
 
 ---
 
-## References & Inspiration
+## Дополнительные замечания
 
-- D3.js Force Layout: https://d3js.org/d3-force
-- D3.js Zoom Behavior: https://d3js.org/d3-zoom
-- Hierarchical Graph Layouts: https://en.wikipedia.org/wiki/Hierarchical_graph_drawing
-- Level of Detail Rendering: https://en.wikipedia.org/wiki/Level_of_detail_(computer_graphics)
+### Эмпирический подбор порога зума
+
+Начальное значение для `ZOOM_THRESHOLD`: **1.5**
+
+Корректировать в процессе разработки для оптимальной читаемости:
+- При зуме < 1.5 → компактный режим (названия сервисов читаемы, ноды компактны)
+- При зуме ≥ 1.5 → полный режим (видны детали, вложенный граф)
+
+### Цветовая схема
+
+- **Основной цвет**: Синий (#4A90E2) для обычных сервисов
+- **Внешние сервисы**: Серый (#95A5A6)
+- **Активный элемент**: Темнее основного цвета (#2E7DD2)
+- **Деактивированные элементы**: opacity 0.2-0.3
+- **Связи**: Серый (#666) с opacity 0.6
+
+### Сайдбары (Angular Material)
+
+Использовать `<mat-sidenav-container>` с двумя `<mat-sidenav>`:
+
+```html
+<mat-sidenav-container>
+  <mat-sidenav position="start" [(opened)]="useCaseSidebarOpen">
+    <!-- Левый сайдбар: шаги юзкейса -->
+  </mat-sidenav>
+
+  <mat-sidenav position="end" [(opened)]="endpointSidebarOpen">
+    <!-- Правый сайдбар: детали эндпоинта -->
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <!-- Канвас графа -->
+  </mat-sidenav-content>
+</mat-sidenav-container>
+```
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-10-07
-**Status**: Planning Phase
+**Версия документа**: 2.0
+**Дата**: 2025-10-07
+**Статус**: Готово к реализации

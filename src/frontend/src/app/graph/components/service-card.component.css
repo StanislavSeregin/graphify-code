@@ -1,0 +1,168 @@
+.service-card {
+  width: 400px;
+  height: 300px;
+  cursor: pointer;
+  transition: box-shadow 0.3s ease;
+  box-sizing: border-box;
+}
+
+.service-card:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Regular service styles */
+.service-card:not(.external) {
+  background-color: #4A90E2;
+  color: white;
+}
+
+/* External service styles */
+.service-card.external {
+  background-color: #95A5A6;
+  color: white;
+}
+
+/* External service icon */
+.service-card mat-icon[mat-card-avatar] {
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+  color: white;
+}
+
+/* Title */
+.service-card mat-card-title {
+  color: white;
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.service-card.compact mat-card-title {
+  font-size: 32px;
+}
+
+.service-card.full mat-card-title {
+  font-size: 18px;
+}
+
+/* Subtitle */
+.service-card mat-card-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.service-card.compact mat-card-subtitle {
+  font-size: 24px;
+  margin-top: 24px;
+}
+
+.service-card.full mat-card-subtitle {
+  font-size: 14px;
+}
+
+/* Full mode content */
+.service-card mat-card-content {
+  color: white;
+  padding-top: 16px;
+}
+
+/* Description */
+.description {
+  line-height: 1.4;
+  margin: 0 0 12px 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.service-card.full .description {
+  font-size: 13px;
+}
+
+/* Code path */
+.code-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 0;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-card.full .code-path {
+  font-size: 12px;
+}
+
+.code-path mat-icon {
+  flex-shrink: 0;
+}
+
+.service-card.full .code-path mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+}
+
+.code-path span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nested graph placeholder */
+.nested-graph-placeholder {
+  height: 120px;
+  border: 2px dashed rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+}
+
+.service-card.full .placeholder-content {
+  font-size: 12px;
+}
+
+.placeholder-content mat-icon {
+  opacity: 0.6;
+}
+
+.service-card.full .placeholder-content mat-icon {
+  font-size: 32px;
+  width: 32px;
+  height: 32px;
+}
+
+/* Compact mode - center content */
+.service-card.compact mat-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+/* Full mode - default layout */
+.service-card.full mat-card-header {
+  text-align: left;
+}
