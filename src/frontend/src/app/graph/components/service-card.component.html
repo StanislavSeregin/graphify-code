@@ -9,11 +9,13 @@
   <ng-container *ngIf="displayMode === 'compact'">
     <mat-card-header>
       <mat-icon *ngIf="isExternal" mat-card-avatar>link</mat-icon>
-      <mat-card-title [matTooltip]="serviceData.service.name">
+      <mat-card-title>
         {{ serviceData.service.name }}
       </mat-card-title>
-      <mat-card-subtitle>
-        {{ endpointCount }} endpoints, {{ useCaseCount }} use cases
+      <mat-card-subtitle *ngIf="endpointCount > 0 || useCaseCount > 0">
+        <span *ngIf="endpointCount > 0">{{ endpointCount }} endpoint<span *ngIf="endpointCount !== 1">s</span></span>
+        <span *ngIf="endpointCount > 0 && useCaseCount > 0">, </span>
+        <span *ngIf="useCaseCount > 0">{{ useCaseCount }} use case<span *ngIf="useCaseCount !== 1">s</span></span>
       </mat-card-subtitle>
     </mat-card-header>
   </ng-container>
@@ -22,7 +24,7 @@
   <ng-container *ngIf="displayMode === 'full'">
     <mat-card-header>
       <mat-icon *ngIf="isExternal" mat-card-avatar>link</mat-icon>
-      <mat-card-title [matTooltip]="serviceData.service.name">
+      <mat-card-title>
         {{ serviceData.service.name }}
       </mat-card-title>
     </mat-card-header>
@@ -41,7 +43,7 @@
         </button>
       </div>
 
-      <p class="code-path" *ngIf="serviceData.service.relativeCodePath" [matTooltip]="serviceData.service.relativeCodePath">
+      <p class="code-path" *ngIf="serviceData.service.relativeCodePath">
         <mat-icon>code</mat-icon>
         <span>{{ serviceData.service.relativeCodePath }}</span>
       </p>

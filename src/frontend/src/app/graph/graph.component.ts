@@ -42,6 +42,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   endpointSidebarOpen = false;
   endpointSidebarData: EndpointSidebarData | null = null;
+  private currentZoomScale = 1;
+  private nestedGraphWasReset = false;
 
   private getCardWidth(): number {
     const vw = window.innerWidth;
@@ -74,6 +76,13 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(data => {
         this.endpointSidebarData = data;
+      });
+
+    // Subscribe to zoom scale to track current zoom level
+    this.graphService.zoomScale$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(scale => {
+        this.currentZoomScale = scale;
       });
   }
 
@@ -111,8 +120,46 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      this.resetToInitialView();
+      // If we're zoomed in on a service card (scale >= 1.0)
+      if (this.currentZoomScale >= 1.0) {
+        // Check if any nested graph was changed
+        const anyNestedGraphChanged = this.nodes.some(node =>
+          node.componentRef &&
+          node.componentRef.instance.nestedGraph &&
+          node.componentRef.instance.nestedGraph.isZoomChanged()
+        );
+
+        // If nested graph wasn't touched, skip to main graph reset
+        if (!anyNestedGraphChanged && !this.nestedGraphWasReset) {
+          this.resetToInitialView();
+          this.nestedGraphWasReset = false;
+          return;
+        }
+
+        // First Esc: reset nested graph
+        if (!this.nestedGraphWasReset) {
+          this.resetNestedGraphs();
+          this.nestedGraphWasReset = true;
+        } else {
+          // Second Esc: zoom out to overview
+          this.resetToInitialView();
+          this.nestedGraphWasReset = false;
+        }
+      } else {
+        // Already at overview level, just reset position/zoom
+        this.resetToInitialView();
+        this.nestedGraphWasReset = false;
+      }
     }
+  }
+
+  private resetNestedGraphs(): void {
+    // Find all service cards and reset their nested graphs
+    this.nodes.forEach(node => {
+      if (node.componentRef && node.componentRef.instance.nestedGraph) {
+        node.componentRef.instance.nestedGraph.resetToDefault();
+      }
+    });
   }
 
   private resetToInitialView(): void {
@@ -326,6 +373,12 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     const transform = d3.zoomIdentity
       .translate(translateX, translateY)
       .scale(scale);
+
+    // Reset the Esc counter and nested graph zoom flag when focusing on a new node
+    this.nestedGraphWasReset = false;
+    if (node.componentRef && node.componentRef.instance.nestedGraph) {
+      node.componentRef.instance.nestedGraph.resetZoomChangedFlag();
+    }
 
     this.svg
       .transition()

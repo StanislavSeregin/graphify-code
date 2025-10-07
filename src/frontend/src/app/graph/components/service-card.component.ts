@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, Output, EventEmitter, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -19,6 +19,7 @@ export class ServiceCardComponent implements OnInit, OnDestroy {
   @Input() serviceData!: ServiceData;
   @Output() focusRequested = new EventEmitter<void>();
   @Output() endpointClick = new EventEmitter<{endpoint: Endpoint, service: ServiceData}>();
+  @ViewChild(NestedGraphComponent) nestedGraph?: NestedGraphComponent;
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;

@@ -41,6 +41,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private zoom!: d3.ZoomBehavior<SVGSVGElement, unknown>;
   private localDisplayMode$ = new BehaviorSubject<DisplayMode>('compact');
   private currentScale = 0.2;
+  private initialScale = 0.08;
+  private wasZoomChanged = false;
 
   private readonly DISPLAY_MODE_THRESHOLD = 0.1;
 
@@ -104,6 +106,31 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener('resize', () => this.onWindowResize());
   }
 
+  public resetToDefault(): void {
+    if (!this.svg) return;
+
+    // Reset zoom to initial state
+    const baseScale = Math.min(window.innerWidth, window.innerHeight) / 15000;
+    const initialScale = Math.max(0.025, Math.min(0.08, baseScale));
+    const initialTransform = d3.zoomIdentity.scale(initialScale);
+
+    this.svg
+      .transition()
+      .duration(750)
+      .call(this.zoom.transform, initialTransform);
+
+    // Reset the flag
+    this.wasZoomChanged = false;
+  }
+
+  public isZoomChanged(): boolean {
+    return this.wasZoomChanged;
+  }
+
+  public resetZoomChangedFlag(): void {
+    this.wasZoomChanged = false;
+  }
+
   private initSvg(): void {
     this.svg = d3.select(this.svgElement.nativeElement);
     this.gMain = this.svg.append('g').attr('class', 'nested-main');
@@ -117,6 +144,12 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         this.gMain.attr('transform', event.transform.toString());
         this.currentScale = event.transform.k;
 
+        // Check if zoom was changed from initial state
+        const scaleDiff = Math.abs(this.currentScale - this.initialScale);
+        if (scaleDiff > 0.001) {
+          this.wasZoomChanged = true;
+        }
+
         // Update local display mode based on zoom scale
         const newMode: DisplayMode = this.currentScale >= this.DISPLAY_MODE_THRESHOLD ? 'full' : 'compact';
         if (this.localDisplayMode$.value !== newMode) {
@@ -128,8 +161,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Set initial zoom level based on viewport - reduced for wider cards
     const baseScale = Math.min(window.innerWidth, window.innerHeight) / 15000;
-    const initialScale = Math.max(0.025, Math.min(0.08, baseScale));
-    const initialTransform = d3.zoomIdentity.scale(initialScale);
+    this.initialScale = Math.max(0.025, Math.min(0.08, baseScale));
+    const initialTransform = d3.zoomIdentity.scale(this.initialScale);
     this.svg.call(this.zoom.transform, initialTransform);
   }
 
@@ -162,14 +195,6 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
       node.y = startY + i * spacing;
       node.fx = node.x;
       node.fy = node.y;
-    });
-
-    console.log('Nested graph setup:', {
-      width, height, centerX, centerY,
-      cardWidth: this.getCardWidth(),
-      cardHeight: this.getCardHeight(),
-      spacing,
-      nodeCount: this.nodes.length
     });
 
     // Render nodes

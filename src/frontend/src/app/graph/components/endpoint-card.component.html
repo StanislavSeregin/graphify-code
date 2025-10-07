@@ -8,7 +8,7 @@
   <ng-container *ngIf="displayMode === 'compact'">
     <mat-card-header>
       <mat-icon [style.color]="typeColor" mat-card-avatar>{{ typeIcon }}</mat-icon>
-      <mat-card-title [matTooltip]="endpoint.name">
+      <mat-card-title>
         {{ endpoint.name }}
       </mat-card-title>
     </mat-card-header>
@@ -18,7 +18,7 @@
   <ng-container *ngIf="displayMode === 'full'">
     <mat-card-header>
       <mat-icon [style.color]="typeColor" mat-card-avatar>{{ typeIcon }}</mat-icon>
-      <mat-card-title [matTooltip]="endpoint.name">
+      <mat-card-title>
         {{ endpoint.name }}
       </mat-card-title>
     </mat-card-header>
@@ -37,7 +37,7 @@
         </button>
       </div>
 
-      <p class="code-path" *ngIf="endpoint.relativeCodePath" [matTooltip]="endpoint.relativeCodePath">
+      <p class="code-path" *ngIf="endpoint.relativeCodePath">
         <mat-icon>code</mat-icon>
         <span>{{ endpoint.relativeCodePath }}</span>
       </p>
