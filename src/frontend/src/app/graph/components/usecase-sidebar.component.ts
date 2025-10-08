@@ -10,6 +10,7 @@ import { UseCase, UseCaseStep, ServiceData } from '../graph.service';
 export interface UseCaseSidebarData {
   useCase: UseCase;
   service: ServiceData;
+  allServices?: ServiceData[];  // For looking up service names
 }
 
 @Component({
@@ -42,6 +43,10 @@ export interface UseCaseSidebarData {
         <section class="sidebar-section">
           <h4>Use Case Details</h4>
           <div class="usecase-info">
+            <div class="info-item" *ngIf="initiatingEndpointName">
+              <span class="info-label">Initiating Endpoint</span>
+              <span class="info-value">{{ initiatingEndpointName }}</span>
+            </div>
             <div class="info-item" *ngIf="data.useCase.description">
               <span class="info-label">Description</span>
               <p class="info-value">{{ data.useCase.description }}</p>
@@ -73,6 +78,11 @@ export interface UseCaseSidebarData {
               </mat-expansion-panel-header>
 
               <div class="step-content">
+                <div class="step-info-item" *ngIf="getStepTargetInfo(step) as targetInfo">
+                  <span class="step-info-label">{{ targetInfo.label }}</span>
+                  <span class="step-info-value">{{ targetInfo.value }}</span>
+                </div>
+
                 <div class="step-info-item" *ngIf="step.description">
                   <span class="step-info-label">Description</span>
                   <p class="step-info-value">{{ step.description }}</p>
@@ -339,5 +349,55 @@ export class UseCaseSidebarComponent {
     if (this.expandedStepIndex === index) {
       this.expandedStepIndex = null;
     }
+  }
+
+  getStepTargetInfo(step: UseCaseStep): { label: string, value: string } | null {
+    if (!this.data) return null;
+
+    // Priority: endpointId > serviceId
+    if (step.endpointId) {
+      // Find endpoint in current service first
+      const localEndpoint = this.data.service.endpoint.find(ep => ep.id === step.endpointId);
+      if (localEndpoint) {
+        return { label: 'Refers to endpoint', value: localEndpoint.name };
+      }
+
+      // Search in all services if provided
+      if (this.data.allServices) {
+        for (const serviceData of this.data.allServices) {
+          const endpoint = serviceData.endpoint.find(ep => ep.id === step.endpointId);
+          if (endpoint) {
+            return {
+              label: 'Refers to endpoint',
+              value: `${endpoint.name} (${serviceData.service.name})`
+            };
+          }
+        }
+      }
+
+      return { label: 'Endpoint ID', value: step.endpointId };
+    } else if (step.serviceId) {
+      // Search in all services if provided
+      if (this.data.allServices) {
+        const targetService = this.data.allServices.find(s => s.service.id === step.serviceId);
+        if (targetService) {
+          return { label: 'Contained in service', value: targetService.service.name };
+        }
+      }
+
+      return { label: 'Service ID', value: step.serviceId };
+    }
+
+    return null;
+  }
+
+  get initiatingEndpointName(): string | null {
+    if (!this.data) return null;
+
+    const endpoint = this.data.service.endpoint.find(
+      ep => ep.id === this.data!.useCase.initiatingEndpointId
+    );
+
+    return endpoint ? endpoint.name : null;
   }
 }

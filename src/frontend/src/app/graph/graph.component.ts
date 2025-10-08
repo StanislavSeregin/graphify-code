@@ -516,7 +516,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     // Open use case sidebar with data
     this.sidebarService.openUseCaseSidebar({
       useCase,
-      service
+      service,
+      allServices: this.fullGraphData?.services
     });
   }
 
