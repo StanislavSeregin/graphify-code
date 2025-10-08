@@ -519,6 +519,14 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       service,
       allServices: this.fullGraphData?.services
     });
+
+    // Also open endpoint sidebar with initiating endpoint
+    const initiatingEndpoint = service.endpoint.find(
+      ep => ep.id === useCase.initiatingEndpointId
+    );
+    if (initiatingEndpoint) {
+      this.onEndpointClick(initiatingEndpoint, service);
+    }
   }
 
   onSidebarServiceClick(serviceId: string): void {
@@ -550,9 +558,13 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   onUseCaseStepClick(event: {step: UseCaseStep, index: number}): void {
     const { step } = event;
 
-    // Priority: endpointId > serviceId
-    if (step.endpointId && this.fullGraphData) {
-      // Find the endpoint and its service
+    if (!this.fullGraphData || !this.useCaseSidebarData) return;
+
+    const parentServiceId = this.useCaseSidebarData.service.service.id;
+    const initiatingEndpointId = this.useCaseSidebarData.useCase.initiatingEndpointId;
+
+    if (step.endpointId) {
+      // Step references a specific endpoint
       for (const serviceData of this.fullGraphData.services) {
         const endpoint = serviceData.endpoint.find(ep => ep.id === step.endpointId);
         if (endpoint) {
@@ -561,16 +573,44 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
           if (node) {
             this.focusOnNode(node);
           }
-          // Optionally open endpoint sidebar
-          // this.onEndpointClick(endpoint, serviceData);
+          // Open endpoint sidebar
+          this.onEndpointClick(endpoint, serviceData);
           break;
         }
       }
     } else if (step.serviceId) {
-      // Focus on the service
-      const node = this.nodes.find(n => n.id === step.serviceId);
-      if (node) {
-        this.focusOnNode(node);
+      // Step references a service (no specific endpoint)
+      if (step.serviceId === parentServiceId) {
+        // Same as parent service - show initiating endpoint
+        const initiatingEndpoint = this.useCaseSidebarData.service.endpoint.find(
+          ep => ep.id === initiatingEndpointId
+        );
+        if (initiatingEndpoint) {
+          const node = this.nodes.find(n => n.id === parentServiceId);
+          if (node) {
+            this.focusOnNode(node);
+          }
+          this.onEndpointClick(initiatingEndpoint, this.useCaseSidebarData.service);
+        }
+      } else {
+        // Different service - focus on it and close endpoint sidebar
+        const node = this.nodes.find(n => n.id === step.serviceId);
+        if (node) {
+          this.focusOnNode(node);
+        }
+        this.closeEndpointSidebar();
+      }
+    } else {
+      // No reference - show initiating endpoint
+      const initiatingEndpoint = this.useCaseSidebarData.service.endpoint.find(
+        ep => ep.id === initiatingEndpointId
+      );
+      if (initiatingEndpoint) {
+        const node = this.nodes.find(n => n.id === parentServiceId);
+        if (node) {
+          this.focusOnNode(node);
+        }
+        this.onEndpointClick(initiatingEndpoint, this.useCaseSidebarData.service);
       }
     }
   }
