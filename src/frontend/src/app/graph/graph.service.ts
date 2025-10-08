@@ -67,7 +67,6 @@ export interface ZoomState {
 export class GraphService {
   private readonly apiUrl = environment.apiUrl;
   private readonly SERVICE_CARD_FULL_THRESHOLD = 1.0;
-  private readonly ENDPOINT_CARD_FULL_THRESHOLD = 0.75;
 
   // Data state
   private graphDataSubject = new BehaviorSubject<FullGraph | null>(null);
@@ -92,6 +91,7 @@ export class GraphService {
     map(state => state.scale),
     distinctUntilChanged()
   );
+
   public zoomTransform$: Observable<d3.ZoomTransform> = this.zoomState$.pipe(
     map(state => state.transform),
     distinctUntilChanged()
@@ -100,11 +100,6 @@ export class GraphService {
   // Public observables - Display mode
   public displayMode$: Observable<DisplayMode> = this.zoomState$.pipe(
     map(state => state.scale >= this.SERVICE_CARD_FULL_THRESHOLD ? 'full' : 'compact'),
-    distinctUntilChanged()
-  );
-
-  public endpointDisplayMode$: Observable<DisplayMode> = this.zoomState$.pipe(
-    map(state => state.scale >= this.ENDPOINT_CARD_FULL_THRESHOLD ? 'full' : 'compact'),
     distinctUntilChanged()
   );
 
