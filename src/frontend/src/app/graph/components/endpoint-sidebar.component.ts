@@ -207,6 +207,7 @@ export interface EndpointSidebarData {
       color: #333;
       margin: 0;
       line-height: 1.5;
+      white-space: pre-line;
     }
 
     .code-path {
@@ -268,7 +269,7 @@ export interface EndpointSidebarData {
     }
 
     .multiline-description {
-      white-space: normal !important;
+      white-space: pre-line !important;
       line-height: 1.4 !important;
       padding: 4px 0 !important;
     }

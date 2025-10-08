@@ -99,14 +99,16 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             {
                 method.Line($$"""
                     var sb = new System.Text.StringBuilder();
-                    sb.AppendLine($"# {{{headerProperty.Name}}}");
+                    sb.Append($"# {{{headerProperty.Name}}}");
+                    sb.Append('\n');
                     """);
             }
             else
             {
                 method.Line($$"""
                     var sb = new System.Text.StringBuilder();
-                    sb.AppendLine("# {{typeName}}");
+                    sb.Append("# {{typeName}}");
+                    sb.Append('\n');
                     """);
             }
 
@@ -163,10 +165,15 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 method.Nest("// Parse primitive properties\nwhile (index < lines.Length && lines[index].StartsWith(\"- \"))", loop =>
                 {
                     loop.Line("var line = lines[index];");
+                    loop.Line("var propertyParsed = false;");
                     foreach (var handler in primitiveHandlers)
                     {
                         handler.GenerateDeserializationCode(loop, 1);
                     }
+                    loop.Nest("if (!propertyParsed)", notParsed =>
+                    {
+                        notParsed.Line("break;");
+                    });
                     loop.Line("index++;");
                 });
             }
@@ -222,30 +229,92 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             firstProperty = false;
             var formatExpr = GetFormatExpression(Property.Type, Property.Name);
+            var isStringType = Property.Type.SpecialType == SpecialType.System_String ||
+                              (Property.Type.IsReferenceType && Property.Type.NullableAnnotation == NullableAnnotation.Annotated &&
+                               Property.Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).SpecialType == SpecialType.System_String);
 
             // Check if property is nullable
             if (IsNullableType(Property.Type))
             {
                 code.Nest($"if ({Property.Name} != null)", ifBlock =>
                 {
-                    ifBlock.Line($"sb.AppendLine($\"- {Property.Name}: {{{formatExpr}}}\");");
+                    if (isStringType)
+                    {
+                        ifBlock.Line($$"""
+                            var {{Property.Name.ToLowerInvariant()}}Lines = {{formatExpr}}.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                            sb.Append($"- {{Property.Name}}: {{{Property.Name.ToLowerInvariant()}}Lines[0]}");
+                            for (int i = 1; i < {{Property.Name.ToLowerInvariant()}}Lines.Length; i++)
+                            {
+                                sb.Append('\n');
+                                sb.Append({{Property.Name.ToLowerInvariant()}}Lines[i]);
+                            }
+                            sb.Append('\n');
+                            """);
+                    }
+                    else
+                    {
+                        ifBlock.Line($"sb.Append($\"- {Property.Name}: {{{formatExpr}}}\");\nsb.Append('\\n');");
+                    }
                 });
             }
             else
             {
-                code.Line($"sb.AppendLine($\"- {Property.Name}: {{{formatExpr}}}\");");
+                if (isStringType)
+                {
+                    code.Line($$"""
+                        var {{Property.Name.ToLowerInvariant()}}Lines = {{formatExpr}}.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                        sb.Append($"- {{Property.Name}}: {{{Property.Name.ToLowerInvariant()}}Lines[0]}");
+                        for (int i = 1; i < {{Property.Name.ToLowerInvariant()}}Lines.Length; i++)
+                        {
+                            sb.Append('\n');
+                            sb.Append({{Property.Name.ToLowerInvariant()}}Lines[i]);
+                        }
+                        sb.Append('\n');
+                        """);
+                }
+                else
+                {
+                    code.Line($"sb.Append($\"- {Property.Name}: {{{formatExpr}}}\");\nsb.Append('\\n');");
+                }
             }
         }
 
         public override void GenerateDeserializationCode(CodeBuilder code, int currentLevel)
         {
             var parseExpr = GetParseExpression(Property.Type, "value");
+            var isStringType = Property.Type.SpecialType == SpecialType.System_String ||
+                              (Property.Type.IsReferenceType && Property.Type.NullableAnnotation == NullableAnnotation.Annotated &&
+                               Property.Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated).SpecialType == SpecialType.System_String);
+
             code.Nest($"if (line.StartsWith(\"- {Property.Name}: \"))", ifBlock =>
             {
-                ifBlock.Line($$"""
-                    var value = line.Substring({{2 + Property.Name.Length + 2}});
-                    obj.{{Property.Name}} = {{parseExpr}};
-                    """);
+                if (isStringType)
+                {
+                    ifBlock.Line($$"""
+                        var valueBuilder = new System.Text.StringBuilder();
+                        valueBuilder.Append(line.Substring({{2 + Property.Name.Length + 2}}));
+                        index++;
+                        // Read continuation lines (lines that don't start with "- ")
+                        while (index < lines.Length && !lines[index].StartsWith("- ") && !lines[index].StartsWith("#"))
+                        {
+                            valueBuilder.Append('\n');
+                            valueBuilder.Append(lines[index]);
+                            index++;
+                        }
+                        index--; // Step back since the outer loop will increment
+                        var value = valueBuilder.ToString();
+                        obj.{{Property.Name}} = {{parseExpr}};
+                        propertyParsed = true;
+                        """);
+                }
+                else
+                {
+                    ifBlock.Line($$"""
+                        var value = line.Substring({{2 + Property.Name.Length + 2}});
+                        obj.{{Property.Name}} = {{parseExpr}};
+                        propertyParsed = true;
+                        """);
+                }
             });
         }
     }
@@ -259,10 +328,14 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             var header = GetHeaderPrefix(currentLevel);
             var formatExpr = GetFormatExpression(elementType, "item");
             code.Line($$"""
-                sb.AppendLine();
-                sb.AppendLine("{{header}} {{Property.Name}}");
+                sb.Append('\n');
+                sb.Append("{{header}} {{Property.Name}}");
+                sb.Append('\n');
                 foreach (var item in {{Property.Name}})
-                    sb.AppendLine($"- {{{formatExpr}}}");
+                {
+                    sb.Append($"- {{{formatExpr}}}");
+                    sb.Append('\n');
+                }
                 """);
         }
 
@@ -298,11 +371,15 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             firstProperty = false;
             var header = GetHeaderPrefix(currentLevel);
             code.Line($$"""
-                sb.AppendLine();
-                sb.AppendLine("{{header}} {{Property.Name}}");
+                sb.Append('\n');
+                sb.Append("{{header}} {{Property.Name}}");
+                sb.Append('\n');
                 var nested{{Property.Name}}Lines = {{Property.Name}}.ToMarkdown().Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
                 for (int i = 1; i < nested{{Property.Name}}Lines.Length; i++)
-                    sb.AppendLine(nested{{Property.Name}}Lines[i]);
+                {
+                    sb.Append(nested{{Property.Name}}Lines[i]);
+                    sb.Append('\n');
+                }
                 """);
         }
 
@@ -315,10 +392,12 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 {
                     index++;
                     var nestedLines = new System.Text.StringBuilder();
-                    nestedLines.AppendLine("# {{Property.Type.Name}}");
+                    nestedLines.Append("# {{Property.Type.Name}}");
+                    nestedLines.Append('\n');
                     while (index < lines.Length && lines[index].StartsWith("- "))
                     {
-                        nestedLines.AppendLine(lines[index]);
+                        nestedLines.Append(lines[index]);
+                        nestedLines.Append('\n');
                         index++;
                     }
                     obj.{{Property.Name}} = {{Property.Type.ToDisplayString()}}.FromMarkdown(nestedLines.ToString());
@@ -342,39 +421,47 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             if (headerProperty != null)
             {
                 code.Line($$"""
-                    sb.AppendLine();
+                    sb.Append('\n');
                     foreach (var item in {{Property.Name}})
                     {
                         var itemMarkdown = item.ToMarkdown();
                         var itemLines = itemMarkdown.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
-                        sb.AppendLine($"{{nextHeader}} {item.{{headerProperty.Name}}}");
+                        sb.Append($"{{nextHeader}} {item.{{headerProperty.Name}}}");
+                        sb.Append('\n');
                         for (int i = 1; i < itemLines.Length; i++)
                         {
                             var line = itemLines[i];
                             if (string.IsNullOrEmpty(line))
                             {
-                                sb.AppendLine();
+                                sb.Append('\n');
                                 continue;
                             }
                             if (line.StartsWith("- {{headerProperty.Name}}: "))
                                 continue;
                             if (line.StartsWith("{{currentHeader}}"))
-                                sb.AppendLine(line.Substring({{currentLevel - 1}}).Insert(0, "{{nextHeader.Substring(0, currentLevel)}}"));
+                            {
+                                sb.Append(line.Substring({{currentLevel - 1}}).Insert(0, "{{nextHeader.Substring(0, currentLevel)}}"));
+                                sb.Append('\n');
+                            }
                             else
-                                sb.AppendLine(line);
+                            {
+                                sb.Append(line);
+                                sb.Append('\n');
+                            }
                         }
-                        sb.AppendLine();
+                        sb.Append('\n');
                     }
                     """);
             }
             else
             {
                 code.Line($$"""
-                    sb.AppendLine();
+                    sb.Append('\n');
                     foreach (var item in {{Property.Name}})
                     {
-                        sb.AppendLine(item.ToMarkdown().Replace("{{currentHeader}} ", "{{nextHeader}} "));
-                        sb.AppendLine();
+                        sb.Append(item.ToMarkdown().Replace("{{currentHeader}} ", "{{nextHeader}} "));
+                        sb.Append('\n');
+                        sb.Append('\n');
                     }
                     """);
             }

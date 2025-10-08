@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using GraphifyCode.Data.Entities;
 using NUnit.Framework;
 using System;
@@ -43,6 +43,47 @@ public class SerializeDeserializeTests
 
         // Assert
         obj.Should().BeEquivalentTo(ServiceData);
+    }
+
+    private static readonly Service ServiceDataWithMultiline = new()
+    {
+        Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+        Name = "UserService",
+        Description = """
+        Handles user authentication and management.
+        And some else...
+        """,
+        LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
+        RelativeCodePath = "src/services/UserService.cs"
+    };
+
+    private const string ServiceMarkdownWithMultiline = """
+        # UserService
+        - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - Description: Handles user authentication and management.
+        And some else...
+        - LastAnalyzedAt: 15.10.2024 14:30:00
+        - RelativeCodePath: src/services/UserService.cs
+        """;
+
+    [Test]
+    public void Serialize_ServiceWithMultiline_MarkdownShouldBeExpected()
+    {
+        // Act
+        var markdown = ServiceDataWithMultiline.ToMarkdown();
+
+        // Assert
+        markdown.Should().Be(ServiceMarkdownWithMultiline);
+    }
+
+    [Test]
+    public void Deserialize_ServiceMultiline_ObjectShouldBeExpected()
+    {
+        // Act
+        var obj = Service.FromMarkdown(ServiceMarkdownWithMultiline);
+
+        // Assert
+        obj.Should().BeEquivalentTo(ServiceDataWithMultiline);
     }
 
     private static readonly Endpoints EndpointsData = new()
