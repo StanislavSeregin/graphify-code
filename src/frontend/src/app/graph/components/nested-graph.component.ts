@@ -1,14 +1,30 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { EndpointCardComponent } from './endpoint-card.component';
-import { Endpoint, DisplayMode } from '../graph.service';
+import { UseCaseCardComponent } from './usecase-card.component';
+import { Endpoint, UseCase, DisplayMode } from '../graph.service';
 import * as d3 from 'd3';
 import { BehaviorSubject } from 'rxjs';
 
 interface EndpointNode extends d3.SimulationNodeDatum {
   id: string;
+  type: 'endpoint';
   endpoint: Endpoint;
   componentRef?: any;
+}
+
+interface UseCaseNode extends d3.SimulationNodeDatum {
+  id: string;
+  type: 'usecase';
+  useCase: UseCase;
+  componentRef?: any;
+}
+
+type GraphNode = EndpointNode | UseCaseNode;
+
+interface Link {
+  source: string | GraphNode;
+  target: string | GraphNode;
 }
 
 @Component({
@@ -31,13 +47,17 @@ interface EndpointNode extends d3.SimulationNodeDatum {
 export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('nestedSvg', { static: false}) svgElement!: ElementRef<SVGSVGElement>;
   @Input() endpoints: Endpoint[] = [];
+  @Input() useCases: UseCase[] = [];
   @Output() endpointClick = new EventEmitter<Endpoint>();
+  @Output() useCaseClick = new EventEmitter<UseCase>();
 
   private svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
   private gMain!: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private gLinks!: d3.Selection<SVGGElement, unknown, null, undefined>;
   private gNodes!: d3.Selection<SVGGElement, unknown, null, undefined>;
-  private simulation!: d3.Simulation<EndpointNode, undefined>;
-  private nodes: EndpointNode[] = [];
+  private simulation!: d3.Simulation<GraphNode, Link>;
+  private nodes: GraphNode[] = [];
+  private links: Link[] = [];
   private zoom!: d3.ZoomBehavior<SVGSVGElement, unknown>;
   private localDisplayMode$ = new BehaviorSubject<DisplayMode>('compact');
   private currentScale = 0.2;
@@ -134,6 +154,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private initSvg(): void {
     this.svg = d3.select(this.svgElement.nativeElement);
     this.gMain = this.svg.append('g').attr('class', 'nested-main');
+    this.gLinks = this.gMain.append('g').attr('class', 'nested-links');
     this.gNodes = this.gMain.append('g').attr('class', 'nested-nodes');
   }
 
@@ -167,13 +188,30 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private renderEndpoints(): void {
-    if (!this.endpoints || this.endpoints.length === 0) {
+    if ((!this.endpoints || this.endpoints.length === 0) &&
+        (!this.useCases || this.useCases.length === 0)) {
       return;
     }
 
-    this.nodes = this.endpoints.map(endpoint => ({
+    // Create nodes for both endpoints and use cases
+    const endpointNodes: EndpointNode[] = (this.endpoints || []).map(endpoint => ({
       id: endpoint.id,
+      type: 'endpoint',
       endpoint: endpoint
+    }));
+
+    const useCaseNodes: UseCaseNode[] = (this.useCases || []).map(useCase => ({
+      id: useCase.id,
+      type: 'usecase',
+      useCase: useCase
+    }));
+
+    this.nodes = [...endpointNodes, ...useCaseNodes];
+
+    // Create links between use cases and their initiating endpoints
+    this.links = (this.useCases || []).map(useCase => ({
+      source: useCase.id,
+      target: useCase.initiatingEndpointId
     }));
 
     const width = this.svgElement.nativeElement.clientWidth;
@@ -197,12 +235,15 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
       node.fy = node.y;
     });
 
+    // Render links
+    this.renderLinks();
+
     // Render nodes
     const nodeSelection = this.gNodes
-      .selectAll<SVGGElement, EndpointNode>('g')
+      .selectAll<SVGGElement, GraphNode>('g')
       .data(this.nodes, d => d.id)
       .join('g')
-      .attr('class', 'endpoint-node');
+      .attr('class', d => d.type === 'endpoint' ? 'endpoint-node' : 'usecase-node');
 
     nodeSelection.each((d, i, groups) => {
       const group = d3.select(groups[i]);
@@ -215,37 +256,89 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         .attr('x', -cardWidth / 2)
         .attr('y', -cardHeight / 2);
 
-      const componentRef = createComponent(EndpointCardComponent, {
-        environmentInjector: this.injector
-      });
+      if (d.type === 'endpoint') {
+        const componentRef = createComponent(EndpointCardComponent, {
+          environmentInjector: this.injector
+        });
 
-      d.componentRef = componentRef;
-      componentRef.setInput('endpoint', d.endpoint);
-      componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
+        d.componentRef = componentRef;
+        componentRef.setInput('endpoint', d.endpoint);
+        componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
 
-      // Subscribe to focus event - emit endpoint click for sidebar AND focus
-      componentRef.instance.focusRequested.subscribe(() => {
-        this.endpointClick.emit(d.endpoint);
-        this.focusOnNode(d);
-      });
+        // Subscribe to focus event - emit endpoint click for sidebar AND focus
+        componentRef.instance.focusRequested.subscribe(() => {
+          this.endpointClick.emit(d.endpoint);
+          this.focusOnNode(d);
+        });
 
-      this.appRef.attachView(componentRef.hostView);
+        this.appRef.attachView(componentRef.hostView);
 
-      const domElement = componentRef.location.nativeElement;
-      foreignObject.node()?.appendChild(domElement);
+        const domElement = componentRef.location.nativeElement;
+        foreignObject.node()?.appendChild(domElement);
+      } else {
+        const componentRef = createComponent(UseCaseCardComponent, {
+          environmentInjector: this.injector
+        });
+
+        d.componentRef = componentRef;
+        componentRef.setInput('useCase', d.useCase);
+        componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
+
+        // Subscribe to focus event - emit use case click for sidebar AND focus
+        componentRef.instance.focusRequested.subscribe(() => {
+          this.useCaseClick.emit(d.useCase);
+          this.focusOnNode(d);
+        });
+
+        this.appRef.attachView(componentRef.hostView);
+
+        const domElement = componentRef.location.nativeElement;
+        foreignObject.node()?.appendChild(domElement);
+      }
     });
 
     // Set initial positions
     nodeSelection.attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
   }
 
+  private renderLinks(): void {
+    this.gLinks
+      .selectAll<SVGLineElement, Link>('line')
+      .data(this.links)
+      .join('line')
+      .attr('class', 'usecase-link')
+      .attr('stroke', '#8a2be2')
+      .attr('stroke-width', 2)
+      .attr('stroke-opacity', 0.4)
+      .attr('x1', d => {
+        const source = typeof d.source === 'string' ?
+          this.nodes.find(n => n.id === d.source) : d.source;
+        return source?.x ?? 0;
+      })
+      .attr('y1', d => {
+        const source = typeof d.source === 'string' ?
+          this.nodes.find(n => n.id === d.source) : d.source;
+        return source?.y ?? 0;
+      })
+      .attr('x2', d => {
+        const target = typeof d.target === 'string' ?
+          this.nodes.find(n => n.id === d.target) : d.target;
+        return target?.x ?? 0;
+      })
+      .attr('y2', d => {
+        const target = typeof d.target === 'string' ?
+          this.nodes.find(n => n.id === d.target) : d.target;
+        return target?.y ?? 0;
+      });
+  }
+
   private onTick(): void {
     this.gNodes
-      .selectAll<SVGGElement, EndpointNode>('g')
+      .selectAll<SVGGElement, GraphNode>('g')
       .attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
   }
 
-  private focusOnNode(node: EndpointNode): void {
+  private focusOnNode(node: GraphNode): void {
     const width = this.svgElement.nativeElement.clientWidth;
     const height = this.svgElement.nativeElement.clientHeight;
 

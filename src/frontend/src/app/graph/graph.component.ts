@@ -1,8 +1,9 @@
 import { Component, OnInit, ViewChild, ElementRef, AfterViewInit, OnDestroy, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
-import { GraphService, FullGraph, ServiceData, DisplayMode } from './graph.service';
+import { GraphService, FullGraph, ServiceData, DisplayMode, UseCase, UseCaseStep } from './graph.service';
 import { SidebarService } from './services/sidebar.service';
 import { ServiceCardComponent } from './components/service-card.component';
 import { EndpointSidebarComponent, EndpointSidebarData } from './components/endpoint-sidebar.component';
+import { UseCaseSidebarComponent, UseCaseSidebarData } from './components/usecase-sidebar.component';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import * as d3 from 'd3';
 import { Subject, takeUntil } from 'rxjs';
@@ -21,7 +22,7 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
 @Component({
   selector: 'app-graph',
   standalone: true,
-  imports: [MatSidenavModule, EndpointSidebarComponent],
+  imports: [MatSidenavModule, EndpointSidebarComponent, UseCaseSidebarComponent],
   templateUrl: './graph.component.html',
   styleUrl: './graph.component.css'
 })
@@ -42,6 +43,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   endpointSidebarOpen = false;
   endpointSidebarData: EndpointSidebarData | null = null;
+  useCaseSidebarOpen = false;
+  useCaseSidebarData: UseCaseSidebarData | null = null;
   private currentZoomScale = 1;
   private nestedGraphWasReset = false;
 
@@ -76,6 +79,18 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(data => {
         this.endpointSidebarData = data;
+      });
+
+    this.sidebarService.useCaseSidebarOpen$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(open => {
+        this.useCaseSidebarOpen = open;
+      });
+
+    this.sidebarService.useCaseSidebarData$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(data => {
+        this.useCaseSidebarData = data;
       });
 
     // Subscribe to zoom scale to track current zoom level
@@ -451,6 +466,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
         this.onEndpointClick(data.endpoint, data.service);
       });
 
+      // Subscribe to use case click event
+      componentRef.instance.useCaseClick.subscribe((data: {useCase: UseCase, service: ServiceData}) => {
+        this.onUseCaseClick(data.useCase, data.service);
+      });
+
       // Attach component to ApplicationRef for change detection
       this.appRef.attachView(componentRef.hostView);
 
@@ -463,6 +483,10 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   // Sidebar methods
   closeEndpointSidebar(): void {
     this.sidebarService.closeEndpointSidebar();
+  }
+
+  closeUseCaseSidebar(): void {
+    this.sidebarService.closeUseCaseSidebar();
   }
 
   onEndpointClick(endpoint: any, service: ServiceData): void {
@@ -488,6 +512,14 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  onUseCaseClick(useCase: UseCase, service: ServiceData): void {
+    // Open use case sidebar with data
+    this.sidebarService.openUseCaseSidebar({
+      useCase,
+      service
+    });
+  }
+
   onSidebarServiceClick(serviceId: string): void {
     // Find and focus on the service with the same zoom level as clicking on service card
     const node = this.nodes.find(n => n.id === serviceId);
@@ -497,7 +529,48 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   onSidebarUseCaseClick(useCaseId: string): void {
-    // TODO: Implement use case sidebar and navigation
-    console.log('Use case clicked:', useCaseId);
+    // Find the use case and its service, then open use case sidebar
+    if (!this.fullGraphData) return;
+
+    for (const serviceData of this.fullGraphData.services) {
+      const useCase = serviceData.useCases.find(uc => uc.id === useCaseId);
+      if (useCase) {
+        this.onUseCaseClick(useCase, serviceData);
+        // Also focus on the service containing this use case
+        const node = this.nodes.find(n => n.id === serviceData.service.id);
+        if (node) {
+          this.focusOnNode(node);
+        }
+        break;
+      }
+    }
+  }
+
+  onUseCaseStepClick(event: {step: UseCaseStep, index: number}): void {
+    const { step } = event;
+
+    // Priority: endpointId > serviceId
+    if (step.endpointId && this.fullGraphData) {
+      // Find the endpoint and its service
+      for (const serviceData of this.fullGraphData.services) {
+        const endpoint = serviceData.endpoint.find(ep => ep.id === step.endpointId);
+        if (endpoint) {
+          // Focus on the service containing this endpoint
+          const node = this.nodes.find(n => n.id === serviceData.service.id);
+          if (node) {
+            this.focusOnNode(node);
+          }
+          // Optionally open endpoint sidebar
+          // this.onEndpointClick(endpoint, serviceData);
+          break;
+        }
+      }
+    } else if (step.serviceId) {
+      // Focus on the service
+      const node = this.nodes.find(n => n.id === step.serviceId);
+      if (node) {
+        this.focusOnNode(node);
+      }
+    }
   }
 }
