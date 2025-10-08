@@ -208,11 +208,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.nodes = [...endpointNodes, ...useCaseNodes];
 
-    // Create links between use cases and their initiating endpoints
-    this.links = (this.useCases || []).map(useCase => ({
-      source: useCase.id,
-      target: useCase.initiatingEndpointId
-    }));
+    // No links in nested graph
+    this.links = [];
 
     const width = this.svgElement.nativeElement.clientWidth;
     const height = this.svgElement.nativeElement.clientHeight;
