@@ -12,6 +12,7 @@ export interface EndpointSidebarData {
   service: ServiceData;
   relatedServices: ServiceData[];
   useCases: UseCase[];
+  externalUseCases: Array<{ useCase: UseCase; service: ServiceData }>;
 }
 
 @Component({
@@ -54,6 +55,37 @@ export class EndpointSidebarComponent {
         this.graphService.showUseCaseDetails(useCase, this.data!.service, fullGraph);
         // Also focus on the service
         this.graphService.focusOnService(this.data!.service.service.id);
+      }
+    }).unsubscribe();
+  }
+
+  onExternalUseCaseClick(useCaseId: string, serviceId: string): void {
+    // Find the external use case and its service
+    if (!this.data) return;
+
+    const externalUseCase = this.data.externalUseCases.find(
+      euc => euc.useCase.id === useCaseId && euc.service.service.id === serviceId
+    );
+    if (!externalUseCase) return;
+
+    // Get full graph for showUseCaseDetails
+    this.graphService.graphData$.subscribe(fullGraph => {
+      if (fullGraph) {
+        this.graphService.showUseCaseDetails(
+          externalUseCase.useCase,
+          externalUseCase.service,
+          fullGraph
+        );
+        // Focus on the service first
+        this.graphService.focusOnService(externalUseCase.service.service.id);
+
+        // Then focus on the initiating endpoint
+        const initiatingEndpoint = externalUseCase.service.endpoint.find(
+          ep => ep.id === externalUseCase.useCase.initiatingEndpointId
+        );
+        if (initiatingEndpoint) {
+          this.graphService.focusOnEndpoint(initiatingEndpoint.id);
+        }
       }
     }).unsubscribe();
   }

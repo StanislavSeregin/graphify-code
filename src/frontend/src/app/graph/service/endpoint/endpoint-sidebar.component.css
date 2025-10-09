@@ -157,6 +157,14 @@
   font-weight: 500;
 }
 
+.service-label {
+  font-size: 11px;
+  color: #4A90E2;
+  font-weight: 600;
+  font-style: italic;
+  padding: 2px 0 !important;
+}
+
 mat-divider {
   display: none;
 }

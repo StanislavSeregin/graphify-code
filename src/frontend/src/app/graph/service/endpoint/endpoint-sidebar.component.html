@@ -63,5 +63,22 @@
         </mat-list-item>
       </mat-list>
     </section>
+
+    <!-- External Use Cases (from other services) -->
+    <section class="sidebar-section" *ngIf="data.externalUseCases.length > 0">
+      <h4>Used By Use Cases</h4>
+      <mat-list>
+        <mat-list-item
+          *ngFor="let external of data.externalUseCases"
+          class="clickable-item"
+          (click)="onExternalUseCaseClick(external.useCase.id, external.service.service.id)">
+          <mat-icon matListItemIcon>call_made</mat-icon>
+          <div matListItemTitle>{{ external.useCase.name }}</div>
+          <div matListItemLine class="service-label">from {{ external.service.service.name }}</div>
+          <div matListItemLine *ngIf="external.useCase.description" class="multiline-description">{{ external.useCase.description }}</div>
+          <div matListItemLine class="step-count">{{ external.useCase.steps.length }} steps</div>
+        </mat-list-item>
+      </mat-list>
+    </section>
   </div>
 </div>

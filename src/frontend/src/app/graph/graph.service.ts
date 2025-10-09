@@ -296,15 +296,30 @@ export class GraphService {
       s.relations.targetEndpointIds.includes(endpoint.id)
     );
 
-    // Find use cases where this endpoint is involved
+    // Find use cases where this endpoint is involved (within the same service)
     const useCases = service.useCases.filter(uc =>
       uc.initiatingEndpointId === endpoint.id ||
       uc.steps.some(step => step.endpointId === endpoint.id)
     );
 
+    // Find use cases from other services that use this endpoint
+    const externalUseCases: Array<{ useCase: UseCase; service: ServiceData }> = [];
+    fullGraph.services.forEach(s => {
+      // Skip the current service to avoid duplicates
+      if (s.service.id === service.service.id) return;
+
+      s.useCases.forEach(uc => {
+        // Check if this use case uses the endpoint in any step
+        const usesEndpoint = uc.steps.some(step => step.endpointId === endpoint.id);
+        if (usesEndpoint) {
+          externalUseCases.push({ useCase: uc, service: s });
+        }
+      });
+    });
+
     this.endpointSidebarRequestSubject.next({
       action: 'open',
-      data: { endpoint, service, relatedServices, useCases }
+      data: { endpoint, service, relatedServices, useCases, externalUseCases }
     });
   }
 
