@@ -326,10 +326,10 @@ export class GraphService {
   /**
    * Open use case sidebar with use case details
    */
-  public showUseCaseDetails(useCase: UseCase, service: ServiceData, fullGraph: FullGraph): void {
+  public showUseCaseDetails(useCase: UseCase, service: ServiceData, fullGraph: FullGraph, stepIndex?: number): void {
     this.useCaseSidebarRequestSubject.next({
       action: 'open',
-      data: { useCase, service, allServices: fullGraph.services }
+      data: { useCase, service, allServices: fullGraph.services, stepIndex }
     });
 
     // Also open endpoint sidebar with initiating endpoint

@@ -68,13 +68,19 @@ export class EndpointSidebarComponent {
     );
     if (!externalUseCase) return;
 
+    // Find the step that uses this endpoint
+    const stepIndex = externalUseCase.useCase.steps.findIndex(
+      step => step.endpointId === this.data!.endpoint.id
+    );
+
     // Get full graph for showUseCaseDetails
     this.graphService.graphData$.subscribe(fullGraph => {
       if (fullGraph) {
         this.graphService.showUseCaseDetails(
           externalUseCase.useCase,
           externalUseCase.service,
-          fullGraph
+          fullGraph,
+          stepIndex
         );
         // Focus on the service first
         this.graphService.focusOnService(externalUseCase.service.service.id);

@@ -11,6 +11,7 @@ export interface UseCaseSidebarData {
   useCase: UseCase;
   service: ServiceData;
   allServices?: ServiceData[];  // For looking up service names
+  stepIndex?: number;
 }
 
 @Component({
@@ -30,14 +31,15 @@ export interface UseCaseSidebarData {
 export class UseCaseSidebarComponent implements OnChanges {
   @Input() data: UseCaseSidebarData | null = null;
 
-  expandedStepIndex: number | null = null;
+  expandedStepIndex: number | null = this.data?.stepIndex ?? null;
 
   constructor(private graphService: GraphService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     // Reset expanded step when use case data changes
-    if (changes['data'] && !changes['data'].firstChange) {
-      this.expandedStepIndex = null;
+    const data = changes['data'];
+    if (data && !data.firstChange) {
+      this.expandedStepIndex = this.data?.stepIndex ?? null;
     }
   }
 
