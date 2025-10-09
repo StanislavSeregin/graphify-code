@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.api
+    container_name: graphify-backend
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - MarkdownStorage__Path=/data
+    volumes:
+      - ${BACKEND_DATA_PATH}:/data
+    networks:
+      - graphify-network
+    restart: unless-stopped
+
+  mcp:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.mcp
+    container_name: graphify-mcp
+    environment:
+      - GRAPHIFY_CODE_DATA_PATH=/data
+      - ASPNETCORE_URLS=http://+:5000
+    volumes:
+      - ${MCP_DATA_PATH}:/data
+    ports:
+      - "5001:5000"
+    networks:
+      - graphify-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    container_name: graphify-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - graphify-network
+    restart: unless-stopped
+
+networks:
+  graphify-network:
+    driver: bridge

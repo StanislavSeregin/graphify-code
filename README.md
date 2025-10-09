@@ -34,43 +34,53 @@ Instead of loading entire documentation, query specific pieces: services, endpoi
 
 Markdown files with guaranteed schema, queryable through MCP tools.
 
-## MCP Server Setup
+## Deployment
 
-### Prerequisites
+### Docker (Recommended)
 
-- .NET 9 SDK installed
-- Claude Code or another MCP-compatible client
+```bash
+cp .env.example .env
+# Edit .env with your data paths
+docker-compose up -d
+```
 
-### Configuration
+Access:
+- Frontend: http://localhost
+- MCP Server: http://localhost:5001
 
-1. Open your Claude Code configuration file:
-   ```bash
-   ~/.claude.json
-   ```
+Configure MCP client:
+```json
+{
+  "mcpServers": {
+    "graphify-code": {
+      "type": "http",
+      "url": "http://localhost:5001"
+    }
+  }
+}
+```
 
-2. Add the GraphifyCode MCP server:
-   ```json
-   {
-     "mcpServers": {
-       "graphify-code": {
-         "type": "stdio",
-         "command": "dotnet",
-         "args": [
-           "run",
-           "--project",
-           "/absolute/path/to/graphify-code/src/backend/GraphifyCode.MCP/GraphifyCode.MCP.csproj"
-         ],
-         "env": {
-           "GRAPHIFY_CODE_DATA_PATH": "/absolute/path/to/graph-data"
-         }
-       }
-     }
-   }
-   ```
+### Local Development
 
-   **Important:** Replace with absolute paths on your system.
+**Prerequisites:** .NET 9 SDK, Node.js 20+
 
-3. Restart Claude Code.
+**MCP Server (stdio mode):**
+
+Edit `~/.claude.json`:
+```json
+{
+  "mcpServers": {
+    "graphify-code": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": ["run", "--project", "/path/to/GraphifyCode.MCP/GraphifyCode.MCP.csproj"],
+      "env": {
+        "GRAPHIFY_CODE_DATA_PATH": "/path/to/graph-data"
+      }
+    }
+  }
+}
+```
 
 ### Available Tools
 
@@ -98,20 +108,44 @@ What are the dependencies of the User Service?
 Add a new endpoint "GET /api/users" to the User Service
 ```
 
+## Architecture
+
+GraphifyCode consists of three services:
+
+- **Frontend** - Angular app with D3.js graph visualization
+- **Backend API** - ASP.NET Core REST API for serving graph data
+- **MCP Server** - HTTP-based MCP tools for documentation management
+
 ## Development
+
+### Project Structure
 
 ```
 src/backend/
-  GraphifyCode.Core/              # Models, settings
   GraphifyCode.Data/              # Data access, Markdown storage
   GraphifyCode.Markdown/          # Serialization framework
   GraphifyCode.Markdown.SourceGen/  # Source generator
-  GraphifyCode.MCP/               # MCP server
+  GraphifyCode.Api/               # Backend REST API
+  GraphifyCode.MCP/               # MCP server (HTTP)
+
+src/frontend/
+  Angular 18 app                  # Graph visualization UI
 ```
 
-**Tech stack:** C# (.NET 9), Markdown serialization with source generators
+### Tech Stack
 
-**Features:** Cascading deletion, idempotent operations, structured schemas
+- **Backend:** C# (.NET 9), ASP.NET Core
+- **Frontend:** Angular 18, D3.js, Angular Material
+- **MCP Server:** ModelContextProtocol.AspNetCore (HTTP transport)
+- **Storage:** Markdown with source-generated serialization
+
+### Features
+
+- Cascading deletion
+- Idempotent operations
+- Structured schemas
+- Real-time graph visualization
+- Direct code navigation from docs
 
 ## License
 

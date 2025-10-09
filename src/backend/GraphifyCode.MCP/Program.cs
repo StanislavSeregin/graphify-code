@@ -24,7 +24,7 @@ public class Program
             })
             .AddSingleton<IDataService, DataService>()
             .AddMcpServer()
-            .WithStdioServerTransport()
+            .WithHttpTransport()
             .WithToolsFromAssembly();
 
         var app = builder.Build();
