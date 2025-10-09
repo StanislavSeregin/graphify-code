@@ -1,12 +1,12 @@
 <mat-sidenav-container class="graph-sidenav-container">
-  <!-- Left sidebar for use case steps -->
-  <mat-sidenav #useCaseSidenav position="start" mode="side" [opened]="useCaseSidebarOpen" [disableClose]="true">
-    <app-usecase-sidebar [data]="useCaseSidebarData"></app-usecase-sidebar>
+  <!-- Left sidebar for endpoint details -->
+  <mat-sidenav #endpointSidenav position="start" mode="side" [opened]="endpointSidebarOpen" [disableClose]="true">
+    <app-endpoint-sidebar [data]="endpointSidebarData"></app-endpoint-sidebar>
   </mat-sidenav>
 
-  <!-- Right sidebar for endpoint details -->
-  <mat-sidenav #endpointSidenav position="end" mode="side" [opened]="endpointSidebarOpen" [disableClose]="true">
-    <app-endpoint-sidebar [data]="endpointSidebarData"></app-endpoint-sidebar>
+  <!-- Right sidebar for use case steps -->
+  <mat-sidenav #useCaseSidenav position="end" mode="side" [opened]="useCaseSidebarOpen" [disableClose]="true">
+    <app-usecase-sidebar [data]="useCaseSidebarData"></app-usecase-sidebar>
   </mat-sidenav>
 
   <!-- Main content -->

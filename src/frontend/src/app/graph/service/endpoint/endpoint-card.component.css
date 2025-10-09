@@ -4,7 +4,7 @@
   cursor: pointer;
   box-sizing: border-box;
   background-color: white;
-  border: clamp(3px, 0.4vw, 10px) solid rgba(76, 175, 80, 0.3);
+  border: clamp(3px, 0.4vw, 10px) solid rgba(74, 144, 226, 0.3);
   border-radius: clamp(6px, 0.6vw, 20px);
   padding: 0;
   overflow: hidden;
@@ -17,12 +17,12 @@
 }
 
 .endpoint-card:hover {
-  border-color: rgba(76, 175, 80, 0.5);
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+  border-color: rgba(74, 144, 226, 0.5);
+  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.25);
 }
 
 .endpoint-card.active {
-  border-color: rgba(76, 175, 80, 0.8);
+  border-color: rgba(74, 144, 226, 0.8);
 }
 
 /* Remove default Material padding and ensure proper sizing */
