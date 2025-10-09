@@ -1,10 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { EndpointCardComponent } from './endpoint-card.component';
-import { UseCaseCardComponent } from './usecase-card.component';
-import { Endpoint, UseCase, DisplayMode } from '../graph.service';
+import { EndpointCardComponent } from './endpoint/endpoint-card.component';
+import { UseCaseCardComponent } from './usecase/usecase-card.component';
+import { Endpoint, UseCase, DisplayMode, GraphService, ZoomRequest } from '../graph.service';
 import * as d3 from 'd3';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject, takeUntil } from 'rxjs';
 
 interface EndpointNode extends d3.SimulationNodeDatum {
   id: string;
@@ -62,7 +62,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private localDisplayMode$ = new BehaviorSubject<DisplayMode>('compact');
   private currentScale = 0.2;
   private initialScale = 0.08;
-  private wasZoomChanged = false;
+  private destroy$ = new Subject<void>();
 
   private readonly DISPLAY_MODE_THRESHOLD = 0.1;
 
@@ -78,7 +78,8 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private appRef: ApplicationRef,
-    private injector: EnvironmentInjector
+    private injector: EnvironmentInjector,
+    private graphService: GraphService
   ) {}
 
   ngOnInit(): void {}
@@ -87,6 +88,13 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initSvg();
     this.setupZoom();
     this.renderEndpoints();
+
+    // Subscribe to nested graph zoom requests
+    this.graphService.nestedGraphZoom$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(request => {
+        this.handleZoomRequest(request);
+      });
 
     // Handle window resize
     window.addEventListener('resize', () => this.onWindowResize());
@@ -112,6 +120,9 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+
     if (this.simulation) {
       this.simulation.stop();
     }
@@ -124,31 +135,6 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.localDisplayMode$.complete();
     // Remove resize listener
     window.removeEventListener('resize', () => this.onWindowResize());
-  }
-
-  public resetToDefault(): void {
-    if (!this.svg) return;
-
-    // Reset zoom to initial state
-    const baseScale = Math.min(window.innerWidth, window.innerHeight) / 15000;
-    const initialScale = Math.max(0.025, Math.min(0.08, baseScale));
-    const initialTransform = d3.zoomIdentity.scale(initialScale);
-
-    this.svg
-      .transition()
-      .duration(750)
-      .call(this.zoom.transform, initialTransform);
-
-    // Reset the flag
-    this.wasZoomChanged = false;
-  }
-
-  public isZoomChanged(): boolean {
-    return this.wasZoomChanged;
-  }
-
-  public resetZoomChangedFlag(): void {
-    this.wasZoomChanged = false;
   }
 
   private initSvg(): void {
@@ -168,7 +154,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         // Check if zoom was changed from initial state
         const scaleDiff = Math.abs(this.currentScale - this.initialScale);
         if (scaleDiff > 0.001) {
-          this.wasZoomChanged = true;
+          this.graphService.markNestedGraphChanged();
         }
 
         // Update local display mode based on zoom scale
@@ -185,6 +171,47 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initialScale = Math.max(0.025, Math.min(0.08, baseScale));
     const initialTransform = d3.zoomIdentity.scale(this.initialScale);
     this.svg.call(this.zoom.transform, initialTransform);
+  }
+
+  /**
+   * Handle zoom request from GraphService
+   */
+  private handleZoomRequest(request: ZoomRequest): void {
+    if (!this.svg) return;
+
+    const duration = request.duration ?? 750;
+    let transform: d3.ZoomTransform;
+
+    if (request.transform) {
+      // Explicit transform provided
+      transform = request.transform;
+    } else if (request.targetId) {
+      // Focus on specific node
+      const node = this.nodes.find(n => n.id === request.targetId);
+      if (!node) return;
+
+      const width = this.svgElement.nativeElement.clientWidth;
+      const height = this.svgElement.nativeElement.clientHeight;
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+      const scale = 0.18; // Higher than DISPLAY_MODE_THRESHOLD (0.1) to trigger full mode
+      const translateX = width / 2 - scale * x;
+      const translateY = height / 2 - scale * y;
+
+      transform = d3.zoomIdentity
+        .translate(translateX, translateY)
+        .scale(scale);
+    } else {
+      // Reset to initial view
+      const baseScale = Math.min(window.innerWidth, window.innerHeight) / 15000;
+      const initialScale = Math.max(0.025, Math.min(0.08, baseScale));
+      transform = d3.zoomIdentity.scale(initialScale);
+    }
+
+    this.svg
+      .transition()
+      .duration(duration)
+      .call(this.zoom.transform, transform);
   }
 
   private renderEndpoints(): void {
@@ -265,7 +292,11 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         // Subscribe to focus event - emit endpoint click for sidebar AND focus
         componentRef.instance.focusRequested.subscribe(() => {
           this.endpointClick.emit(d.endpoint);
-          this.focusOnNode(d);
+          this.graphService.requestZoom({
+            scope: 'nested',
+            targetId: d.id,
+            duration: 750
+          });
         });
 
         this.appRef.attachView(componentRef.hostView);
@@ -284,7 +315,11 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         // Subscribe to focus event - emit use case click for sidebar AND focus
         componentRef.instance.focusRequested.subscribe(() => {
           this.useCaseClick.emit(d.useCase);
-          this.focusOnNode(d);
+          this.graphService.requestZoom({
+            scope: 'nested',
+            targetId: d.id,
+            duration: 750
+          });
         });
 
         this.appRef.attachView(componentRef.hostView);
@@ -333,28 +368,5 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.gNodes
       .selectAll<SVGGElement, GraphNode>('g')
       .attr('transform', d => `translate(${d.x ?? 0},${d.y ?? 0})`);
-  }
-
-  private focusOnNode(node: GraphNode): void {
-    const width = this.svgElement.nativeElement.clientWidth;
-    const height = this.svgElement.nativeElement.clientHeight;
-
-    const x = node.x ?? 0;
-    const y = node.y ?? 0;
-
-    // Calculate transform to center the node and zoom to full mode
-    // Use a scale higher than DISPLAY_MODE_THRESHOLD (0.1) to trigger full mode
-    const scale = 0.18;
-    const translateX = width / 2 - scale * x;
-    const translateY = height / 2 - scale * y;
-
-    const transform = d3.zoomIdentity
-      .translate(translateX, translateY)
-      .scale(scale);
-
-    this.svg
-      .transition()
-      .duration(750)
-      .call(this.zoom.transform, transform);
   }
 }

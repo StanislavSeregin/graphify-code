@@ -1,9 +1,8 @@
 import { Component, OnInit, ViewChild, ElementRef, AfterViewInit, OnDestroy, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
-import { GraphService, FullGraph, ServiceData, DisplayMode, UseCase, UseCaseStep } from './graph.service';
-import { SidebarService } from './services/sidebar.service';
-import { ServiceCardComponent } from './components/service-card.component';
-import { EndpointSidebarComponent, EndpointSidebarData } from './components/endpoint-sidebar.component';
-import { UseCaseSidebarComponent, UseCaseSidebarData } from './components/usecase-sidebar.component';
+import { GraphService, FullGraph, ServiceData, DisplayMode, UseCase, UseCaseStep, ZoomRequest } from './graph.service';
+import { ServiceCardComponent } from './service/service-card.component';
+import { EndpointSidebarComponent, EndpointSidebarData } from './service/endpoint/endpoint-sidebar.component';
+import { UseCaseSidebarComponent, UseCaseSidebarData } from './service/usecase/usecase-sidebar.component';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import * as d3 from 'd3';
 import { Subject, takeUntil } from 'rxjs';
@@ -45,8 +44,6 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   endpointSidebarData: EndpointSidebarData | null = null;
   useCaseSidebarOpen = false;
   useCaseSidebarData: UseCaseSidebarData | null = null;
-  private currentZoomScale = 1;
-  private nestedGraphWasReset = false;
 
   private getCardWidth(): number {
     const vw = window.innerWidth;
@@ -60,7 +57,6 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private graphService: GraphService,
-    private sidebarService: SidebarService,
     private appRef: ApplicationRef,
     private injector: EnvironmentInjector
   ) {}
@@ -68,36 +64,36 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit(): void {
     this.graphService.init();
 
-    // Subscribe to sidebar state
-    this.sidebarService.endpointSidebarOpen$
+    // Subscribe to endpoint sidebar requests
+    this.graphService.endpointSidebarRequest$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(open => {
-        this.endpointSidebarOpen = open;
+      .subscribe(request => {
+        if (request.action === 'open' && request.data) {
+          this.endpointSidebarData = request.data;
+          this.endpointSidebarOpen = true;
+        } else if (request.action === 'close') {
+          this.endpointSidebarOpen = false;
+          // Clear data after animation completes
+          setTimeout(() => {
+            this.endpointSidebarData = null;
+          }, 300);
+        }
       });
 
-    this.sidebarService.endpointSidebarData$
+    // Subscribe to use case sidebar requests
+    this.graphService.useCaseSidebarRequest$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(data => {
-        this.endpointSidebarData = data;
-      });
-
-    this.sidebarService.useCaseSidebarOpen$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(open => {
-        this.useCaseSidebarOpen = open;
-      });
-
-    this.sidebarService.useCaseSidebarData$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(data => {
-        this.useCaseSidebarData = data;
-      });
-
-    // Subscribe to zoom scale to track current zoom level
-    this.graphService.zoomScale$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(scale => {
-        this.currentZoomScale = scale;
+      .subscribe(request => {
+        if (request.action === 'open' && request.data) {
+          this.useCaseSidebarData = request.data;
+          this.useCaseSidebarOpen = true;
+        } else if (request.action === 'close') {
+          this.useCaseSidebarOpen = false;
+          // Clear data after animation completes
+          setTimeout(() => {
+            this.useCaseSidebarData = null;
+          }, 300);
+        }
       });
   }
 
@@ -112,6 +108,13 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
           this.fullGraphData = data;
           this.renderGraph(data);
         }
+      });
+
+    // Subscribe to main graph zoom requests
+    this.graphService.mainGraphZoom$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(request => {
+        this.handleZoomRequest(request);
       });
 
     // Handle window resize
@@ -135,70 +138,58 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      // If we're zoomed in on a service card (scale >= 1.0)
-      if (this.currentZoomScale >= 1.0) {
-        // Check if any nested graph was changed
-        const anyNestedGraphChanged = this.nodes.some(node =>
-          node.componentRef &&
-          node.componentRef.instance.nestedGraph &&
-          node.componentRef.instance.nestedGraph.isZoomChanged()
-        );
-
-        // If nested graph wasn't touched, skip to main graph reset
-        if (!anyNestedGraphChanged && !this.nestedGraphWasReset) {
-          this.resetToInitialView();
-          this.nestedGraphWasReset = false;
-          return;
-        }
-
-        // First Esc: reset nested graph
-        if (!this.nestedGraphWasReset) {
-          this.resetNestedGraphs();
-          this.nestedGraphWasReset = true;
-        } else {
-          // Second Esc: zoom out to overview
-          this.resetToInitialView();
-          this.nestedGraphWasReset = false;
-        }
-      } else {
-        // Already at overview level, just reset position/zoom
-        this.resetToInitialView();
-        this.nestedGraphWasReset = false;
-      }
+      this.graphService.handleEscapeKey();
     }
   }
 
-  private resetNestedGraphs(): void {
-    // Find all service cards and reset their nested graphs
-    this.nodes.forEach(node => {
-      if (node.componentRef && node.componentRef.instance.nestedGraph) {
-        node.componentRef.instance.nestedGraph.resetToDefault();
-      }
-    });
-  }
-
-  private resetToInitialView(): void {
+  /**
+   * Handle zoom request from GraphService
+   */
+  private handleZoomRequest(request: ZoomRequest): void {
     const width = this.svgElement.nativeElement.clientWidth;
     const height = this.svgElement.nativeElement.clientHeight;
+    const duration = request.duration ?? 750;
 
-    // Calculate initial zoom (same as on page load)
-    const initialScale = Math.min(window.innerWidth, window.innerHeight) / 5000;
-    const clampedScale = Math.max(0.1, Math.min(0.3, initialScale));
+    let transform: d3.ZoomTransform;
 
-    // Center on the graph center
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const translateX = width / 2 - clampedScale * centerX;
-    const translateY = height / 2 - clampedScale * centerY;
+    if (request.transform) {
+      // Explicit transform provided
+      transform = request.transform;
+    } else if (request.targetId) {
+      // Focus on specific node
+      const node = this.nodes.find(n => n.id === request.targetId);
+      if (!node) return;
 
-    const initialTransform = d3.zoomIdentity
-      .translate(translateX, translateY)
-      .scale(clampedScale);
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+      const scale = 2.5;
+      const translateX = width / 2 - scale * x;
+      const translateY = height / 2 - scale * y;
+
+      transform = d3.zoomIdentity
+        .translate(translateX, translateY)
+        .scale(scale);
+
+      // Clear pending nested reset when focusing on a node
+      this.graphService.clearPendingNestedReset();
+    } else {
+      // Reset to initial view
+      const initialScale = Math.min(window.innerWidth, window.innerHeight) / 5000;
+      const clampedScale = Math.max(0.1, Math.min(0.3, initialScale));
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const translateX = width / 2 - clampedScale * centerX;
+      const translateY = height / 2 - clampedScale * centerY;
+
+      transform = d3.zoomIdentity
+        .translate(translateX, translateY)
+        .scale(clampedScale);
+    }
 
     this.svg
       .transition()
-      .duration(750)
-      .call(this.zoom.transform, initialTransform);
+      .duration(duration)
+      .call(this.zoom.transform, transform);
   }
 
   ngOnDestroy(): void {
@@ -374,31 +365,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private focusOnNode(node: GraphNode): void {
-    const width = this.svgElement.nativeElement.clientWidth;
-    const height = this.svgElement.nativeElement.clientHeight;
-
-    const x = node.x ?? 0;
-    const y = node.y ?? 0;
-
-    // Calculate transform to center the node and zoom to full mode (2.5)
-    const scale = 2.5;
-    const translateX = width / 2 - scale * x;
-    const translateY = height / 2 - scale * y;
-
-    const transform = d3.zoomIdentity
-      .translate(translateX, translateY)
-      .scale(scale);
-
-    // Reset the Esc counter and nested graph zoom flag when focusing on a new node
-    this.nestedGraphWasReset = false;
-    if (node.componentRef && node.componentRef.instance.nestedGraph) {
-      node.componentRef.instance.nestedGraph.resetZoomChangedFlag();
-    }
-
-    this.svg
-      .transition()
-      .duration(750)
-      .call(this.zoom.transform, transform);
+    this.graphService.requestZoom({
+      scope: 'main',
+      targetId: node.id,
+      duration: 750
+    });
   }
 
   private renderLinks(links: GraphLink[]): void {
@@ -482,11 +453,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Sidebar methods
   closeEndpointSidebar(): void {
-    this.sidebarService.closeEndpointSidebar();
+    this.graphService.closeEndpointSidebar();
   }
 
   closeUseCaseSidebar(): void {
-    this.sidebarService.closeUseCaseSidebar();
+    this.graphService.closeUseCaseSidebar();
   }
 
   onEndpointClick(endpoint: any, service: ServiceData): void {
@@ -504,7 +475,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     );
 
     // Open sidebar with data
-    this.sidebarService.openEndpointSidebar({
+    this.graphService.openEndpointSidebar({
       endpoint,
       service,
       relatedServices,
@@ -514,7 +485,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onUseCaseClick(useCase: UseCase, service: ServiceData): void {
     // Open use case sidebar with data
-    this.sidebarService.openUseCaseSidebar({
+    this.graphService.openUseCaseSidebar({
       useCase,
       service,
       allServices: this.fullGraphData?.services

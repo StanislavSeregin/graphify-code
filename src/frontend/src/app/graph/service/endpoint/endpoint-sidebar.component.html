@@ -1,0 +1,67 @@
+<div class="sidebar-container" *ngIf="data">
+  <div class="sidebar-header">
+    <div class="sidebar-title">
+      <h2>{{ data.service.service.name }}</h2>
+      <h3>{{ data.endpoint.name }}</h3>
+    </div>
+    <button mat-icon-button (click)="close.emit()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <div class="sidebar-content">
+    <!-- Endpoint Details -->
+    <section class="sidebar-section">
+      <h4>Endpoint Details</h4>
+      <div class="endpoint-info">
+        <div class="info-item">
+          <span class="info-label">Type</span>
+          <span class="info-value">{{ data.endpoint.type }}</span>
+        </div>
+        <div class="info-item" *ngIf="data.endpoint.description">
+          <span class="info-label">Description</span>
+          <p class="info-value">{{ data.endpoint.description }}</p>
+        </div>
+        <div class="info-item" *ngIf="data.endpoint.relativeCodePath">
+          <span class="info-label">Path</span>
+          <span class="info-value code-path">{{ data.endpoint.relativeCodePath }}</span>
+        </div>
+      </div>
+    </section>
+
+    <mat-divider></mat-divider>
+
+    <!-- Related Services -->
+    <section class="sidebar-section" *ngIf="data.relatedServices.length > 0">
+      <h4>Related Services</h4>
+      <mat-list>
+        <mat-list-item
+          *ngFor="let service of data.relatedServices"
+          class="clickable-item"
+          (click)="onServiceClick(service.service.id)">
+          <mat-icon matListItemIcon>{{service.service.relativeCodePath ? 'apps' : 'link'}}</mat-icon>
+          <div matListItemTitle>{{ service.service.name }}</div>
+          <div matListItemLine *ngIf="service.service.description" class="multiline-description">{{ service.service.description }}</div>
+        </mat-list-item>
+      </mat-list>
+    </section>
+
+    <!-- Use Cases -->
+    <section class="sidebar-section" *ngIf="data.useCases.length > 0">
+      <h4>Use Cases</h4>
+      <mat-list>
+        <mat-list-item
+          *ngFor="let useCase of data.useCases"
+          class="clickable-item"
+          (click)="onUseCaseClick(useCase.id)">
+          <mat-icon matListItemIcon>playlist_play</mat-icon>
+          <div matListItemTitle>{{ useCase.name }}</div>
+          <div matListItemLine *ngIf="useCase.description" class="multiline-description">{{ useCase.description }}</div>
+          <div matListItemLine class="step-count">{{ useCase.steps.length }} steps</div>
+        </mat-list-item>
+      </mat-list>
+    </section>
+  </div>
+</div>

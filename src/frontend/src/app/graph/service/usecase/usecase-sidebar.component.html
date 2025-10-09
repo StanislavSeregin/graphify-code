@@ -1,0 +1,73 @@
+<div class="sidebar-container" *ngIf="data">
+  <div class="sidebar-header">
+    <div class="sidebar-title">
+      <h2>{{ data.service.service.name }}</h2>
+      <h3>{{ data.useCase.name }}</h3>
+    </div>
+    <button mat-icon-button (click)="close.emit()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <div class="sidebar-content">
+    <!-- Use Case Details -->
+    <section class="sidebar-section">
+      <h4>Use Case Details</h4>
+      <div class="usecase-info">
+        <div class="info-item" *ngIf="initiatingEndpointName">
+          <span class="info-label">Initiating Endpoint</span>
+          <span class="info-value">{{ initiatingEndpointName }}</span>
+        </div>
+        <div class="info-item" *ngIf="data.useCase.description">
+          <span class="info-label">Description</span>
+          <p class="info-value">{{ data.useCase.description }}</p>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Total Steps</span>
+          <span class="info-value">{{ data.useCase.steps.length }}</span>
+        </div>
+      </div>
+    </section>
+
+    <mat-divider></mat-divider>
+
+    <!-- Steps -->
+    <section class="sidebar-section">
+      <h4>Steps</h4>
+      <mat-accordion class="steps-accordion">
+        <mat-expansion-panel
+          *ngFor="let step of data.useCase.steps; let i = index"
+          [expanded]="expandedStepIndex === i"
+          (opened)="onStepExpanded(i, step)"
+          (closed)="onStepClosed(i)">
+
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <span class="step-number">{{ i + 1 }}</span>
+              <span class="step-name">{{ step.name }}</span>
+            </mat-panel-title>
+          </mat-expansion-panel-header>
+
+          <div class="step-content">
+            <div class="step-info-item" *ngIf="getStepTargetInfo(step) as targetInfo">
+              <span class="step-info-label">{{ targetInfo.label }}</span>
+              <span class="step-info-value">{{ targetInfo.value }}</span>
+            </div>
+
+            <div class="step-info-item" *ngIf="step.description">
+              <span class="step-info-label">Description</span>
+              <p class="step-info-value">{{ step.description }}</p>
+            </div>
+
+            <div class="step-info-item" *ngIf="step.relativeCodePath">
+              <span class="step-info-label">Code Path</span>
+              <span class="step-info-value code-path">{{ step.relativeCodePath }}</span>
+            </div>
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+    </section>
+  </div>
+</div>
