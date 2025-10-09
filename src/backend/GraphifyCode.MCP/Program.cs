@@ -10,7 +10,7 @@ namespace GraphifyCode.MCP;
 
 public class Program
 {
-    private const string PATH_ENV_KEY = "GRAPHIFY_CODE_DATA_PATH";
+    private const string PATH_ENV_KEY = "DATA_PATH";
 
     static Task Main(string[] args)
     {

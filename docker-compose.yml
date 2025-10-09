@@ -11,7 +11,7 @@ services:
       - ASPNETCORE_URLS=http://+:5000
       - MarkdownStorage__Path=/data
     volumes:
-      - ${BACKEND_DATA_PATH}:/data
+      - ${DATA_PATH}:/data
     networks:
       - graphify-network
     restart: unless-stopped
@@ -22,10 +22,10 @@ services:
       dockerfile: Dockerfile.mcp
     container_name: graphify-mcp
     environment:
-      - GRAPHIFY_CODE_DATA_PATH=/data
+      - DATA_PATH=/data
       - ASPNETCORE_URLS=http://+:5000
     volumes:
-      - ${MCP_DATA_PATH}:/data
+      - ${DATA_PATH}:/data
     ports:
       - "5001:5000"
     networks:

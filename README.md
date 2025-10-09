@@ -40,7 +40,7 @@ Markdown files with guaranteed schema, queryable through MCP tools.
 
 ```bash
 cp .env.example .env
-# Edit .env with your data paths
+# Edit .env with your data path (DATA_PATH)
 docker-compose up -d
 ```
 
@@ -75,7 +75,7 @@ Edit `~/.claude.json`:
       "command": "dotnet",
       "args": ["run", "--project", "/path/to/GraphifyCode.MCP/GraphifyCode.MCP.csproj"],
       "env": {
-        "GRAPHIFY_CODE_DATA_PATH": "/path/to/graph-data"
+        "DATA_PATH": "/path/to/graph-data"
       }
     }
   }
