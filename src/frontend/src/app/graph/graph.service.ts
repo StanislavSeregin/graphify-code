@@ -393,7 +393,6 @@ export class GraphService {
         if (serviceData.service.id !== parentServiceId) {
           this.focusOnService(serviceData.service.id);
         }
-        // Always focus on the endpoint
         this.focusOnEndpoint(endpoint.id);
         this.showEndpointDetails(endpoint, serviceData, fullGraph);
         break;

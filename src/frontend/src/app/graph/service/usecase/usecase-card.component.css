@@ -13,11 +13,16 @@
   justify-content: center;
   opacity: 1 !important;
   position: relative;
+  transition: border-color 0.3s ease, border-width 0.3s ease;
 }
 
 .usecase-card:hover {
   border-color: rgba(138, 43, 226, 0.5);
   box-shadow: 0 2px 8px rgba(138, 43, 226, 0.25);
+}
+
+.usecase-card.active {
+  border-color: rgba(138, 43, 226, 0.8);
 }
 
 /* Remove default Material padding and ensure proper sizing */

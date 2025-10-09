@@ -1,6 +1,7 @@
 <mat-card
   [class.compact]="displayMode === 'compact'"
   [class.full]="displayMode === 'full'"
+  [class.active]="isActive"
   class="endpoint-card"
   (click)="onCardClick($event)">
 

@@ -21,6 +21,7 @@ export class EndpointCardComponent implements OnInit, OnDestroy {
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;
+  isActive = false;
   private destroy$ = new Subject<void>();
   private fullGraph: any = null;
 
@@ -40,6 +41,14 @@ export class EndpointCardComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(data => {
         this.fullGraph = data;
+      });
+
+    // Subscribe to nested graph zoom events to track active endpoint
+    this.graphService.nestedGraphZoom$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(zoomRequest => {
+        // Only this endpoint is active if zoom targets it, otherwise inactive
+        this.isActive = zoomRequest.targetId === this.endpoint.id;
       });
   }
 

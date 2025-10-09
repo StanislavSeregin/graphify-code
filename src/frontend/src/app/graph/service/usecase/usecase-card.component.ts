@@ -21,6 +21,7 @@ export class UseCaseCardComponent implements OnInit, OnDestroy {
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;
+  isActive = false;
   private destroy$ = new Subject<void>();
   private fullGraph: any = null;
 
@@ -40,6 +41,14 @@ export class UseCaseCardComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(data => {
         this.fullGraph = data;
+      });
+
+    // Subscribe to nested graph zoom events to track active use case
+    this.graphService.nestedGraphZoom$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(zoomRequest => {
+        // Only this use case is active if zoom targets it, otherwise inactive
+        this.isActive = zoomRequest.targetId === this.useCase.id;
       });
   }
 
