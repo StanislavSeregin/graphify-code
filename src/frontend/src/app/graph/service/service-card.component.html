@@ -52,8 +52,7 @@
         <app-nested-graph
           [endpoints]="serviceData.endpoint"
           [useCases]="serviceData.useCases"
-          (endpointClick)="onEndpointClick($event)"
-          (useCaseClick)="onUseCaseClick($event)">
+          [serviceData]="serviceData">
         </app-nested-graph>
       </div>
     </mat-card-content>

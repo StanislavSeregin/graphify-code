@@ -1,10 +1,10 @@
-import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
-import { ServiceData, GraphService, DisplayMode, Endpoint, UseCase } from '../graph.service';
+import { ServiceData, GraphService, DisplayMode, Endpoint, UseCase, FullGraph } from '../graph.service';
 import { NestedGraphComponent } from './nested-graph.component';
 import { Subject, takeUntil } from 'rxjs';
 
@@ -17,13 +17,11 @@ import { Subject, takeUntil } from 'rxjs';
 })
 export class ServiceCardComponent implements OnInit, OnDestroy {
   @Input() serviceData!: ServiceData;
-  @Output() focusRequested = new EventEmitter<void>();
-  @Output() endpointClick = new EventEmitter<{endpoint: Endpoint, service: ServiceData}>();
-  @Output() useCaseClick = new EventEmitter<{useCase: UseCase, service: ServiceData}>();
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;
   private destroy$ = new Subject<void>();
+  private fullGraph: FullGraph | null = null;
 
   constructor(private graphService: GraphService) {}
 
@@ -32,6 +30,13 @@ export class ServiceCardComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(mode => {
         this.displayMode = mode;
+      });
+
+    // Subscribe to full graph data
+    this.graphService.graphData$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(data => {
+        this.fullGraph = data;
       });
   }
 
@@ -46,15 +51,17 @@ export class ServiceCardComponent implements OnInit, OnDestroy {
   }
 
   onCardClick(event: Event): void {
-    this.focusRequested.emit();
+    this.graphService.focusOnService(this.serviceData.service.id);
   }
 
   onEndpointClick(endpoint: Endpoint): void {
-    this.endpointClick.emit({endpoint, service: this.serviceData});
+    if (!this.fullGraph) return;
+    this.graphService.showEndpointDetails(endpoint, this.serviceData, this.fullGraph);
   }
 
   onUseCaseClick(useCase: UseCase): void {
-    this.useCaseClick.emit({useCase, service: this.serviceData});
+    if (!this.fullGraph) return;
+    this.graphService.showUseCaseDetails(useCase, this.serviceData, this.fullGraph);
   }
 
   get isExternal(): boolean {

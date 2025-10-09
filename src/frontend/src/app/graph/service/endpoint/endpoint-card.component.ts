@@ -1,10 +1,10 @@
-import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatButtonModule } from '@angular/material/button';
-import { Endpoint, DisplayMode } from '../../graph.service';
+import { Endpoint, DisplayMode, GraphService } from '../../graph.service';
 import { Subject, takeUntil, Observable } from 'rxjs';
 
 @Component({
@@ -17,13 +17,14 @@ import { Subject, takeUntil, Observable } from 'rxjs';
 export class EndpointCardComponent implements OnInit, OnDestroy {
   @Input() endpoint!: Endpoint;
   @Input() displayMode$?: Observable<DisplayMode>;
-  @Output() focusRequested = new EventEmitter<void>();
+  @Input() serviceData?: any; // ServiceData from parent nested-graph
 
   displayMode: DisplayMode = 'compact';
   isDescriptionExpanded = false;
   private destroy$ = new Subject<void>();
+  private fullGraph: any = null;
 
-  constructor() {}
+  constructor(private graphService: GraphService) {}
 
   ngOnInit(): void {
     if (this.displayMode$) {
@@ -33,6 +34,13 @@ export class EndpointCardComponent implements OnInit, OnDestroy {
           this.displayMode = mode;
         });
     }
+
+    // Subscribe to full graph for sidebar opening
+    this.graphService.graphData$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(data => {
+        this.fullGraph = data;
+      });
   }
 
   ngOnDestroy(): void {
@@ -46,7 +54,17 @@ export class EndpointCardComponent implements OnInit, OnDestroy {
   }
 
   onCardClick(event: Event): void {
-    this.focusRequested.emit();
+    // Focus on endpoint in nested graph
+    this.graphService.requestZoom({
+      scope: 'nested',
+      targetId: this.endpoint.id,
+      duration: 750
+    });
+
+    // Open endpoint sidebar if we have serviceData and fullGraph
+    if (this.serviceData && this.fullGraph) {
+      this.graphService.showEndpointDetails(this.endpoint, this.serviceData, this.fullGraph);
+    }
   }
 
   get typeIcon(): string {

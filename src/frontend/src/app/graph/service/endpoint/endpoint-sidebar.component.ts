@@ -1,11 +1,11 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatDividerModule } from '@angular/material/divider';
-import { Endpoint, ServiceData, UseCase } from '../../graph.service';
+import { Endpoint, ServiceData, UseCase, GraphService, FullGraph } from '../../graph.service';
 
 export interface EndpointSidebarData {
   endpoint: Endpoint;
@@ -30,15 +30,31 @@ export interface EndpointSidebarData {
 })
 export class EndpointSidebarComponent {
   @Input() data: EndpointSidebarData | null = null;
-  @Output() close = new EventEmitter<void>();
-  @Output() serviceClick = new EventEmitter<string>();
-  @Output() useCaseClick = new EventEmitter<string>();
+
+  constructor(private graphService: GraphService) {}
+
+  onClose(): void {
+    this.graphService.closeEndpointSidebar();
+  }
 
   onServiceClick(serviceId: string): void {
-    this.serviceClick.emit(serviceId);
+    this.graphService.focusOnService(serviceId);
   }
 
   onUseCaseClick(useCaseId: string): void {
-    this.useCaseClick.emit(useCaseId);
+    // Find the use case and open its sidebar
+    if (!this.data) return;
+
+    const useCase = this.data.useCases.find(uc => uc.id === useCaseId);
+    if (!useCase) return;
+
+    // Get full graph for showUseCaseDetails
+    this.graphService.graphData$.subscribe(fullGraph => {
+      if (fullGraph) {
+        this.graphService.showUseCaseDetails(useCase, this.data!.service, fullGraph);
+        // Also focus on the service
+        this.graphService.focusOnService(this.data!.service.service.id);
+      }
+    }).unsubscribe();
   }
 }

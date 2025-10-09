@@ -1,8 +1,8 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit, ApplicationRef, createComponent, EnvironmentInjector } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { EndpointCardComponent } from './endpoint/endpoint-card.component';
 import { UseCaseCardComponent } from './usecase/usecase-card.component';
-import { Endpoint, UseCase, DisplayMode, GraphService, ZoomRequest } from '../graph.service';
+import { Endpoint, UseCase, DisplayMode, GraphService, ZoomRequest, ServiceData, FullGraph } from '../graph.service';
 import * as d3 from 'd3';
 import { BehaviorSubject, Subject, takeUntil } from 'rxjs';
 
@@ -48,8 +48,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('nestedSvg', { static: false}) svgElement!: ElementRef<SVGSVGElement>;
   @Input() endpoints: Endpoint[] = [];
   @Input() useCases: UseCase[] = [];
-  @Output() endpointClick = new EventEmitter<Endpoint>();
-  @Output() useCaseClick = new EventEmitter<UseCase>();
+  @Input() serviceData!: ServiceData;
 
   private svg!: d3.Selection<SVGSVGElement, unknown, null, undefined>;
   private gMain!: d3.Selection<SVGGElement, unknown, null, undefined>;
@@ -63,6 +62,7 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
   private currentScale = 0.2;
   private initialScale = 0.08;
   private destroy$ = new Subject<void>();
+  private fullGraph: FullGraph | null = null;
 
   private readonly DISPLAY_MODE_THRESHOLD = 0.1;
 
@@ -82,7 +82,14 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
     private graphService: GraphService
   ) {}
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    // Subscribe to full graph data for sidebar operations
+    this.graphService.graphData$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(data => {
+        this.fullGraph = data;
+      });
+  }
 
   ngAfterViewInit(): void {
     this.initSvg();
@@ -288,16 +295,9 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         d.componentRef = componentRef;
         componentRef.setInput('endpoint', d.endpoint);
         componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
+        componentRef.setInput('serviceData', this.serviceData);
 
-        // Subscribe to focus event - emit endpoint click for sidebar AND focus
-        componentRef.instance.focusRequested.subscribe(() => {
-          this.endpointClick.emit(d.endpoint);
-          this.graphService.requestZoom({
-            scope: 'nested',
-            targetId: d.id,
-            duration: 750
-          });
-        });
+        // Note: Click handling is now done directly in EndpointCardComponent via GraphService
 
         this.appRef.attachView(componentRef.hostView);
 
@@ -311,16 +311,9 @@ export class NestedGraphComponent implements OnInit, AfterViewInit, OnDestroy {
         d.componentRef = componentRef;
         componentRef.setInput('useCase', d.useCase);
         componentRef.setInput('displayMode$', this.localDisplayMode$.asObservable());
+        componentRef.setInput('serviceData', this.serviceData);
 
-        // Subscribe to focus event - emit use case click for sidebar AND focus
-        componentRef.instance.focusRequested.subscribe(() => {
-          this.useCaseClick.emit(d.useCase);
-          this.graphService.requestZoom({
-            scope: 'nested',
-            targetId: d.id,
-            duration: 750
-          });
-        });
+        // Note: Click handling is now done directly in UseCaseCardComponent via GraphService
 
         this.appRef.attachView(componentRef.hostView);
 

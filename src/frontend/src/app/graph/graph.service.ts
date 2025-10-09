@@ -286,16 +286,143 @@ export class GraphService {
   // ============================================================================
   // Sidebar Methods
   // ============================================================================
-  public openEndpointSidebar(data: EndpointSidebarData): void {
-    this.endpointSidebarRequestSubject.next({ action: 'open', data });
+
+  /**
+   * Open endpoint sidebar with endpoint details
+   */
+  public showEndpointDetails(endpoint: Endpoint, service: ServiceData, fullGraph: FullGraph): void {
+    // Find related services (services that call this endpoint)
+    const relatedServices = fullGraph.services.filter(s =>
+      s.relations.targetEndpointIds.includes(endpoint.id)
+    );
+
+    // Find use cases where this endpoint is involved
+    const useCases = service.useCases.filter(uc =>
+      uc.initiatingEndpointId === endpoint.id ||
+      uc.steps.some(step => step.endpointId === endpoint.id)
+    );
+
+    this.endpointSidebarRequestSubject.next({
+      action: 'open',
+      data: { endpoint, service, relatedServices, useCases }
+    });
+  }
+
+  /**
+   * Open use case sidebar with use case details
+   */
+  public showUseCaseDetails(useCase: UseCase, service: ServiceData, fullGraph: FullGraph): void {
+    this.useCaseSidebarRequestSubject.next({
+      action: 'open',
+      data: { useCase, service, allServices: fullGraph.services }
+    });
+
+    // Also open endpoint sidebar with initiating endpoint
+    const initiatingEndpoint = service.endpoint.find(
+      ep => ep.id === useCase.initiatingEndpointId
+    );
+    if (initiatingEndpoint) {
+      this.showEndpointDetails(initiatingEndpoint, service, fullGraph);
+    }
+  }
+
+  /**
+   * Focus on service by ID (main graph)
+   */
+  public focusOnService(serviceId: string): void {
+    this.requestZoom({
+      scope: 'main',
+      targetId: serviceId,
+      duration: 750
+    });
+  }
+
+  /**
+   * Focus on endpoint in nested graph
+   */
+  public focusOnEndpoint(endpointId: string): void {
+    this.requestZoom({
+      scope: 'nested',
+      targetId: endpointId,
+      duration: 750
+    });
+  }
+
+  /**
+   * Handle use case step click
+   *
+   * Invariants:
+   * 1. Step references endpoint -> activate that endpoint
+   * 2. Step references parent service (no endpoint) -> activate parent's initiating endpoint
+   * 3. Step references other service (no endpoint) -> activate that service
+   */
+  public handleUseCaseStepClick(step: UseCaseStep, useCase: UseCase, service: ServiceData, fullGraph: FullGraph): void {
+    const parentServiceId = service.service.id;
+    const initiatingEndpointId = useCase.initiatingEndpointId;
+
+    // Invariant 1: Step references endpoint -> activate that endpoint
+    if (step.endpointId) {
+      this.activateStepEndpoint(step.endpointId, parentServiceId, fullGraph);
+      return;
+    }
+
+    // Invariant 2: Step references parent service -> activate parent's initiating endpoint
+    if (step.serviceId === parentServiceId) {
+      this.activateParentEndpoint(initiatingEndpointId, parentServiceId, service, fullGraph);
+      return;
+    }
+
+    // Invariant 3: Step references other service -> activate that service
+    if (step.serviceId) {
+      this.activateService(step.serviceId);
+      return;
+    }
+
+    // Fallback: No references -> activate parent's initiating endpoint
+    this.activateParentEndpoint(initiatingEndpointId, parentServiceId, service, fullGraph);
+  }
+
+  /**
+   * Activate a specific endpoint referenced by a step
+   */
+  private activateStepEndpoint(endpointId: string, parentServiceId: string, fullGraph: FullGraph): void {
+    for (const serviceData of fullGraph.services) {
+      const endpoint = serviceData.endpoint.find(ep => ep.id === endpointId);
+      if (endpoint) {
+        // If endpoint is in a different service, focus on that service first
+        if (serviceData.service.id !== parentServiceId) {
+          this.focusOnService(serviceData.service.id);
+        }
+        // Always focus on the endpoint
+        this.focusOnEndpoint(endpoint.id);
+        this.showEndpointDetails(endpoint, serviceData, fullGraph);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Activate parent service's initiating endpoint
+   */
+  private activateParentEndpoint(initiatingEndpointId: string, parentServiceId: string, service: ServiceData, fullGraph: FullGraph): void {
+    const initiatingEndpoint = service.endpoint.find(ep => ep.id === initiatingEndpointId);
+    if (initiatingEndpoint) {
+      this.focusOnService(parentServiceId);
+      this.focusOnEndpoint(initiatingEndpoint.id);
+      this.showEndpointDetails(initiatingEndpoint, service, fullGraph);
+    }
+  }
+
+  /**
+   * Activate a service (without focusing on a specific endpoint)
+   */
+  private activateService(serviceId: string): void {
+    this.focusOnService(serviceId);
+    this.closeEndpointSidebar();
   }
 
   public closeEndpointSidebar(): void {
     this.endpointSidebarRequestSubject.next({ action: 'close' });
-  }
-
-  public openUseCaseSidebar(data: UseCaseSidebarData): void {
-    this.useCaseSidebarRequestSubject.next({ action: 'open', data });
   }
 
   public closeUseCaseSidebar(): void {

@@ -1,11 +1,11 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatDividerModule } from '@angular/material/divider';
-import { UseCase, UseCaseStep, ServiceData } from '../../graph.service';
+import { UseCase, UseCaseStep, ServiceData, GraphService } from '../../graph.service';
 
 export interface UseCaseSidebarData {
   useCase: UseCase;
@@ -27,16 +27,40 @@ export interface UseCaseSidebarData {
   templateUrl: './usecase-sidebar.component.html',
   styleUrl: './usecase-sidebar.component.css'
 })
-export class UseCaseSidebarComponent {
+export class UseCaseSidebarComponent implements OnChanges {
   @Input() data: UseCaseSidebarData | null = null;
-  @Output() close = new EventEmitter<void>();
-  @Output() stepClick = new EventEmitter<{step: UseCaseStep, index: number}>();
 
   expandedStepIndex: number | null = null;
 
+  constructor(private graphService: GraphService) {}
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Reset expanded step when use case data changes
+    if (changes['data'] && !changes['data'].firstChange) {
+      this.expandedStepIndex = null;
+    }
+  }
+
+  onClose(): void {
+    this.graphService.closeUseCaseSidebar();
+  }
+
   onStepExpanded(index: number, step: UseCaseStep): void {
     this.expandedStepIndex = index;
-    this.stepClick.emit({ step, index });
+
+    if (!this.data) return;
+
+    // Get full graph for step click handling
+    this.graphService.graphData$.subscribe(fullGraph => {
+      if (fullGraph) {
+        this.graphService.handleUseCaseStepClick(
+          step,
+          this.data!.useCase,
+          this.data!.service,
+          fullGraph
+        );
+      }
+    }).unsubscribe();
   }
 
   onStepClosed(index: number): void {
