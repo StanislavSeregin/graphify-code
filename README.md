@@ -36,17 +36,18 @@ Markdown files with guaranteed schema, queryable through MCP tools.
 
 ## Deployment
 
-### Docker (Recommended)
+### Docker
 
 ```bash
 cp .env.example .env
-# Edit .env with your data path (DATA_PATH)
-docker-compose up -d
+# Edit .env (set DATA_PATH to your graph data directory)
+docker-compose up -d --build
 ```
 
-Access:
-- Frontend: http://localhost
-- MCP Server: http://localhost:5001
+Services:
+- **frontend** - http://localhost
+- **backend** - Internal API (used by frontend)
+- **mcp** - http://localhost:5001
 
 Configure MCP client:
 ```json
@@ -55,28 +56,6 @@ Configure MCP client:
     "graphify-code": {
       "type": "http",
       "url": "http://localhost:5001"
-    }
-  }
-}
-```
-
-### Local Development
-
-**Prerequisites:** .NET 9 SDK, Node.js 20+
-
-**MCP Server (stdio mode):**
-
-Edit `~/.claude.json`:
-```json
-{
-  "mcpServers": {
-    "graphify-code": {
-      "type": "stdio",
-      "command": "dotnet",
-      "args": ["run", "--project", "/path/to/GraphifyCode.MCP/GraphifyCode.MCP.csproj"],
-      "env": {
-        "DATA_PATH": "/path/to/graph-data"
-      }
     }
   }
 }
