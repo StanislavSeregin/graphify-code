@@ -1,7 +1,7 @@
 ﻿using GraphifyCode.Data.Services;
 using GraphifyCode.Data.Settings;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ public class Program
 
     static Task Main(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
+        var builder = WebApplication.CreateBuilder(args);
         builder.Logging.AddConsole();
         builder.Services
             .Configure<MarkdownStorageSettings>(options =>
@@ -28,6 +28,7 @@ public class Program
             .WithToolsFromAssembly();
 
         var app = builder.Build();
+        app.MapMcp();
         return app.RunAsync();
     }
 
