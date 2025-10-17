@@ -13,3 +13,9 @@ public class MarkdownSerializableAttribute : Attribute { /* NOTHING */ }
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
 public class MarkdownHeaderAttribute : Attribute { /* NOTHING */ }
+
+/// <summary>
+/// Marks a property that should be excluded from Markdown serialization and deserialization.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
+public class MarkdownIgnoreAttribute : Attribute { /* NOTHING */ }

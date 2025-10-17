@@ -53,6 +53,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         var properties = typeSymbol.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(p => p.DeclaredAccessibility == Accessibility.Public && p.GetMethod is not null)
+            .Where(p => !p.GetAttributes().Any(a => a.AttributeClass?.Name is "MarkdownIgnoreAttribute" or "MarkdownIgnore"))
             .ToList();
 
         var headerProperty = properties.FirstOrDefault(p => p.GetAttributes()
