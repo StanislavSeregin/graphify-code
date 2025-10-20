@@ -128,7 +128,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         code.Nest($"public static {typeName} FromMarkdown(string markdown)", method =>
         {
             method.Line($$"""
-                var lines = markdown.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+                var lines = markdown.Split({{LineProcessingHelpers.SplitLinesPattern}});
                 var index = 0;
                 var obj = new {{typeName}}();
 
@@ -242,7 +242,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     if (isStringType)
                     {
                         ifBlock.Line($$"""
-                            var {{Property.Name.ToLowerInvariant()}}Lines = {{formatExpr}}.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                            var {{Property.Name.ToLowerInvariant()}}Lines = {{formatExpr}}.Split({{LineProcessingHelpers.SplitLinesPattern}});
                             sb.Append($"- {{Property.Name}}: {{{Property.Name.ToLowerInvariant()}}Lines[0]}");
                             for (int i = 1; i < {{Property.Name.ToLowerInvariant()}}Lines.Length; i++)
                             {
@@ -263,7 +263,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 if (isStringType)
                 {
                     code.Line($$"""
-                        var {{Property.Name.ToLowerInvariant()}}Lines = {{formatExpr}}.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                        var {{Property.Name.ToLowerInvariant()}}Lines = {{formatExpr}}.Split({{LineProcessingHelpers.SplitLinesPattern}});
                         sb.Append($"- {{Property.Name}}: {{{Property.Name.ToLowerInvariant()}}Lines[0]}");
                         for (int i = 1; i < {{Property.Name.ToLowerInvariant()}}Lines.Length; i++)
                         {
@@ -348,6 +348,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
 
             code.Line($$"""
                 // Parse {{Property.Name}}
+                {{LineProcessingHelpers.GenerateSkipEmptyLinesCode()}}
                 if (index < lines.Length && lines[index] == "{{header}} {{Property.Name}}")
                 {
                     index++;
@@ -375,11 +376,15 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 sb.Append('\n');
                 sb.Append("{{header}} {{Property.Name}}");
                 sb.Append('\n');
-                var nested{{Property.Name}}Lines = {{Property.Name}}.ToMarkdown().Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+                var nested{{Property.Name}}Lines = {{Property.Name}}.ToMarkdown().Split({{LineProcessingHelpers.SplitLinesPattern}});
+                // Skip first line (header) and filter out empty lines
                 for (int i = 1; i < nested{{Property.Name}}Lines.Length; i++)
                 {
-                    sb.Append(nested{{Property.Name}}Lines[i]);
-                    sb.Append('\n');
+                    if (!string.IsNullOrEmpty(nested{{Property.Name}}Lines[i]))
+                    {
+                        sb.Append(nested{{Property.Name}}Lines[i]);
+                        sb.Append('\n');
+                    }
                 }
                 """);
         }
@@ -389,6 +394,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             var header = GetHeaderPrefix(currentLevel);
             code.Line($$"""
                 // Parse {{Property.Name}}
+                {{LineProcessingHelpers.GenerateSkipEmptyLinesCode()}}
                 if (index < lines.Length && lines[index] == "{{header}} {{Property.Name}}")
                 {
                     index++;
@@ -426,19 +432,23 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     foreach (var item in {{Property.Name}})
                     {
                         var itemMarkdown = item.ToMarkdown();
-                        var itemLines = itemMarkdown.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                        var itemLines = itemMarkdown.Split({{LineProcessingHelpers.SplitLinesPattern}});
                         sb.Append($"{{nextHeader}} {item.{{headerProperty.Name}}}");
                         sb.Append('\n');
+                        // Process lines: skip header (i=0), filter header property line, adjust nested headers
                         for (int i = 1; i < itemLines.Length; i++)
                         {
                             var line = itemLines[i];
+                            // Preserve empty lines as they may be part of multiline content
                             if (string.IsNullOrEmpty(line))
                             {
                                 sb.Append('\n');
                                 continue;
                             }
+                            // Skip the header property line as it's already in the section header
                             if (line.StartsWith("- {{headerProperty.Name}}: "))
                                 continue;
+                            // Adjust nested header levels
                             if (line.StartsWith("{{currentHeader}}"))
                             {
                                 sb.Append(line.Substring({{currentLevel - 1}}).Insert(0, "{{nextHeader.Substring(0, currentLevel)}}"));
@@ -477,14 +487,16 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             code.Line($$"""
                 // Parse {{Property.Name}}
                 var {{listName}} = new System.Collections.Generic.List<{{elementType.ToDisplayString()}}>();
+                {{LineProcessingHelpers.GenerateSkipEmptyLinesCode()}}
                 while (index < lines.Length && lines[index].StartsWith("{{header}} "))
                 {
                     var itemStart = index;
                     index++;
+                    // Find the end of current item: either next item header or higher-level section
                     while (index < lines.Length && !lines[index].StartsWith("{{header}} "))
                     {
-                        // Check if we hit a header of same or higher level
-                        if (lines[index].StartsWith("#"))
+                        // Check if we hit a header of same or higher level (means we're done with this array)
+                        if (!string.IsNullOrEmpty(lines[index]) && lines[index].StartsWith("#"))
                         {
                             bool isSameOrHigherLevel = true;
                             for (int h = 0; h < {{currentLevel + 1}}; h++)
@@ -519,9 +531,14 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             }
 
             code.Line($$"""
+                    // Collect item content lines (excluding empty lines which are artifacts of splitting)
                     for (int i = itemStart + 1; i < index; i++)
                     {
                         var line = lines[i];
+                        // Skip empty lines - they are artifacts from line splitting, not meaningful content
+                        if (string.IsNullOrEmpty(line))
+                            continue;
+                        // Adjust nested header levels by removing current level prefix
                         if (line.StartsWith("{{header}}"))
                             line = line.Substring({{currentLevel}});
                         itemLines.Add(line);
@@ -546,7 +563,25 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         }
     }
 
-    // Helper methods
+    // Helper methods for line splitting and processing
+    private static class LineProcessingHelpers
+    {
+        // Line splitting pattern that handles all line ending styles
+        public const string SplitLinesPattern = "new[] { \"\\r\\n\", \"\\r\", \"\\n\" }, System.StringSplitOptions.None";
+
+        // Generates code to skip empty lines at current index position
+        public static string GenerateSkipEmptyLinesCode()
+        {
+            return "while (index < lines.Length && string.IsNullOrEmpty(lines[index]))\n    index++;";
+        }
+
+        // Generates code to filter out empty lines when processing split results
+        public static string GenerateFilterEmptyLineCondition()
+        {
+            return "!string.IsNullOrEmpty";
+        }
+    }
+
     private static string GetFormatExpression(ITypeSymbol type, string propertyName)
     {
         // Handle nullable types

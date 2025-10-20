@@ -17,13 +17,13 @@ public class SerializeDeserializeTests
         RelativeCodePath = "src/services/UserService.cs"
     };
 
-    private const string ServiceMarkdown = """
+    private static readonly string ServiceMarkdown = """
         # UserService
         - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Handles user authentication and management
         - LastAnalyzedAt: 15.10.2024 14:30:00
         - RelativeCodePath: src/services/UserService.cs
-        """;
+        """.ReplaceLineEndings("\n");
 
     [Test]
     public void Serialize_Service_MarkdownShouldBeExpected()
@@ -52,19 +52,19 @@ public class SerializeDeserializeTests
         Description = """
         Handles user authentication and management.
         And some else...
-        """,
+        """.ReplaceLineEndings("\n"),
         LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
         RelativeCodePath = "src/services/UserService.cs"
     };
 
-    private const string ServiceMarkdownWithMultiline = """
+    private static readonly string ServiceMarkdownWithMultiline = """
         # UserService
         - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Handles user authentication and management.
         And some else...
         - LastAnalyzedAt: 15.10.2024 14:30:00
         - RelativeCodePath: src/services/UserService.cs
-        """;
+        """.ReplaceLineEndings("\n");
 
     [Test]
     public void Serialize_ServiceWithMultiline_MarkdownShouldBeExpected()
@@ -111,7 +111,7 @@ public class SerializeDeserializeTests
         ]
     };
 
-    private const string EndpointsMarkdown = """
+    private static readonly string EndpointsMarkdown = """
         # Endpoints
 
         ## GetUser
@@ -127,7 +127,7 @@ public class SerializeDeserializeTests
         - Type: http
         - LastAnalyzedAt: 15.10.2024 16:00:00
         - RelativeCodePath: src/controllers/UserController.cs
-        """;
+        """.ReplaceLineEndings("\n");
 
     [Test]
     public void Serialize_Endpoints_MarkdownShouldBeExpected()
@@ -158,13 +158,13 @@ public class SerializeDeserializeTests
         ]
     };
 
-    private const string RelationsMarkdown = """
+    private static readonly string RelationsMarkdown = """
         # Relations
 
         ## TargetEndpointIds
         - 89b71ddd-553a-4861-9383-f9ce24494c3e
         - c97aa83a-8947-49d9-b1a3-d61bc47e361e
-        """;
+        """.ReplaceLineEndings("\n");
 
     [Test]
     public void Serialize_Relations_MarkdownShouldBeExpected()
@@ -214,7 +214,7 @@ public class SerializeDeserializeTests
         ]
     };
 
-    private const string UseCaseMarkdown = """
+    private static readonly string UseCaseMarkdown = """
         # User Registration
         - Id: a1b2c3d4-e5f6-4789-a012-3456789abcde
         - Description: Complete user registration flow
@@ -229,7 +229,7 @@ public class SerializeDeserializeTests
         ## Create User
         - Description: Create user in database
         - EndpointId: 89b71ddd-553a-4861-9383-f9ce24494c3e
-        """;
+        """.ReplaceLineEndings("\n");
 
     [Test]
     public void Serialize_UseCase_MarkdownShouldBeExpected()
