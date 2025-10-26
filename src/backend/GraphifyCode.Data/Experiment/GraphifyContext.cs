@@ -2,33 +2,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace GraphifyCode.Data.Experiment;
 
-public class FullGraph : ILoadable<FullGraph>
-{
-    public required List<Service> Services { get; set; }
-
-    public static async Task<FullGraph> Load(string pathContext, CancellationToken cancellationToken)
-    {
-        var self = new FullGraph() { Services = [] };
-        foreach (var serviceDir in Directory.GetDirectories(pathContext))
-        {
-            var service = await Service.Load(serviceDir, self, cancellationToken);
-            if (service is not null)
-            {
-                self.Services.Add(service);
-            }
-        }
-
-        return self;
-    }
-}
-
 [MarkdownSerializable]
-public partial class Service : ILoadable<Service, FullGraph>
+public partial class Service : ILoadable<Service>
 {
     public Guid Id { get; set; }
 
@@ -47,32 +28,24 @@ public partial class Service : ILoadable<Service, FullGraph>
     [MarkdownIgnore]
     public required List<UseCase> UseCases { get; set; }
 
-    [MarkdownIgnore]
-    public required FullGraph Parent { get; set; }
-
-    public static async Task<Service?> Load(string pathContext, FullGraph parent, CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<Service> Load(string pathContext, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var serviceId = Guid.Parse(Path.GetDirectoryName(pathContext) ?? throw new InvalidOperationException("Service id should be exists"));
-        var filePath = Path.Combine(pathContext, "service.md");
-        var md = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var self = FromMarkdown(md);
-        if (self is not null)
+        foreach (var serviceDir in Directory.GetDirectories(pathContext))
         {
-            self.Id = serviceId;
-            self.Parent = parent;
-            self.Endpoints = await Endpoints.Load(pathContext, self, cancellationToken);
-            self.UseCases = [];
-            foreach (var useCaseFilePath in Directory.GetFiles(Path.Combine(pathContext, "usecases"), "*.md"))
+            if (Path.GetDirectoryName(serviceDir) is { } dirName && Guid.TryParse(dirName, out var serviceId))
             {
-                var useCase = await UseCase.Load(useCaseFilePath, self, cancellationToken);
-                if (useCase is not null)
+                var filePath = Path.Combine(serviceDir, "service.md");
+                var md = await File.ReadAllTextAsync(filePath, cancellationToken);
+                var service = FromMarkdown(md);
+                if (service is not null)
                 {
-                    self.UseCases.Add(useCase);
+                    service.Id = serviceId;
+                    service.Endpoints = await Endpoints.Load(serviceDir, service, cancellationToken).FirstOrDefaultAsync(cancellationToken);
+                    service.UseCases = await UseCase.Load(serviceDir, service, cancellationToken).ToListAsync(cancellationToken);
+                    yield return service;
                 }
             }
         }
-
-        return self;
     }
 }
 
@@ -84,17 +57,16 @@ public partial class Endpoints : ILoadable<Endpoints, Service>
     [MarkdownIgnore]
     public required Service Parent { get; set; }
 
-    public static async Task<Endpoints?> Load(string pathContext, Service parent, CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<Endpoints> Load(string pathContext, Service parent, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var filePath = Path.Combine(pathContext, "endpoints.md");
         var md = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var self = FromMarkdown(md);
-        if (self is not null)
+        var endpoints = FromMarkdown(md);
+        if (endpoints is not null)
         {
-            self.Parent = parent;
+            endpoints.Parent = parent;
+            yield return endpoints;
         }
-
-        return self;
     }
 }
 
@@ -134,18 +106,22 @@ public partial class UseCase : ILoadable<UseCase, Service>
     [MarkdownIgnore]
     public required Service Parent { get; set; }
 
-    public static async Task<UseCase?> Load(string pathContext, Service parent, CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<UseCase> Load(string pathContext, Service parent, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var useCaseId = Guid.Parse(Path.GetFileNameWithoutExtension(pathContext) ?? throw new InvalidOperationException("Usecase id should be exists"));
-        var md = await File.ReadAllTextAsync(pathContext, cancellationToken);
-        var self = FromMarkdown(md);
-        if (self is not null)
+        foreach (var useCaseFilePath in Directory.GetFiles(Path.Combine(pathContext, "usecases"), "*.md"))
         {
-            self.Id = useCaseId;
-            self.Parent = parent;
+            if (Path.GetFileNameWithoutExtension(useCaseFilePath) is { } useCaseIdStr && Guid.TryParse(useCaseIdStr, out var useCaseId))
+            {
+                var md = await File.ReadAllTextAsync(useCaseFilePath, cancellationToken);
+                var useCase = FromMarkdown(md);
+                if (useCase is not null)
+                {
+                    useCase.Id = useCaseId;
+                    useCase.Parent = parent;
+                    yield return useCase;
+                }
+            }
         }
-
-        return self;
     }
 }
 
@@ -166,10 +142,10 @@ public partial class UseCaseStep
 
 internal interface ILoadable<T>
 {
-    static abstract Task<T> Load(string pathContext, CancellationToken cancellationToken);
+    static abstract IAsyncEnumerable<T> Load(string pathContext, CancellationToken cancellationToken);
 }
 
 internal interface ILoadable<T, TParent>
 {
-    static abstract Task<T?> Load(string pathContext, TParent parent, CancellationToken cancellationToken);
+    static abstract IAsyncEnumerable<T> Load(string pathContext, TParent parent, CancellationToken cancellationToken);
 }
