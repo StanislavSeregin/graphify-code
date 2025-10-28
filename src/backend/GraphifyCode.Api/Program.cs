@@ -1,12 +1,9 @@
-using GraphifyCode.Data.Entities;
 using GraphifyCode.Data.Services;
 using GraphifyCode.Data.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 

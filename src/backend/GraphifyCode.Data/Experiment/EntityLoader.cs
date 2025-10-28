@@ -13,13 +13,17 @@ internal static class EntityLoader
     {
         /* Services */
         [typeof(Service)] = new Loader<Service>(
-            PathEnumerator: Directory.GetDirectories,
+            PathEnumerator: (pathContext) => Directory.Exists(pathContext)
+                ? Directory.GetDirectories(pathContext)
+                : [],
             FilePathEnumerator: (path) => [Path.Combine(path, "service.md")],
             Reader: async (path, filePath, ct) =>
             {
                 if (filePath is { } fp
-                    && Path.GetDirectoryName(fp) is { } dn
+                    && Path.GetDirectoryName(fp) is { } dirPath
+                    && Path.GetFileName(dirPath) is { } dn
                     && Guid.TryParse(dn, out var entityId)
+                    && File.Exists(fp)
                     && await File.ReadAllTextAsync(fp, ct) is { } md
                     && Service.FromMarkdown(md) is { } entity)
                 {
@@ -67,6 +71,7 @@ internal static class EntityLoader
             PathEnumerator: (pathContext) => [pathContext],
             FilePathEnumerator: (path) => [Path.Combine(path, "endpoints.md")],
             Reader: async (path, filePath, ct) => filePath is { } fp
+                    && File.Exists(fp)
                     && await File.ReadAllTextAsync(fp, ct) is { } md
                     && Endpoints.FromMarkdown(md) is { } entity
                 ? entity
@@ -86,12 +91,15 @@ internal static class EntityLoader
         /* UseCases */
         [typeof(UseCase)] = new Loader<UseCase>(
             PathEnumerator: (pathContext) => [Path.Combine(pathContext, "usecases")],
-            FilePathEnumerator: (path) => Directory.GetFiles(path, "*.md"),
+            FilePathEnumerator: (path) => Directory.Exists(path)
+                ? Directory.GetFiles(path, "*.md")
+                : [],
             Reader: async (path, filePath, ct) =>
             {
                 if (filePath is { } fp
                     && Path.GetFileNameWithoutExtension(fp) is { } fn
                     && Guid.TryParse(fn, out var id)
+                    && File.Exists(fp)
                     && await File.ReadAllTextAsync(fp, ct) is { } md
                     && UseCase.FromMarkdown(md) is { } entity)
                 {
