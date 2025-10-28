@@ -173,7 +173,8 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     }
                     loop.Nest("if (!propertyParsed)", notParsed =>
                     {
-                        notParsed.Line("break;");
+                        notParsed.Line("// Skip unknown properties (may be marked with MarkdownIgnore)");
+                        notParsed.Line("// We don't break here to allow parsing of remaining properties");
                     });
                     loop.Line("index++;");
                 });
