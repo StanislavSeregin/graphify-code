@@ -7,6 +7,9 @@ namespace GraphifyCode.Data.Experiment;
 public partial class Endpoints
 {
     public required Endpoint[] EndpointList { get; set; }
+
+    [MarkdownIgnore]
+    public required Service Parent { get; set; }
 }
 
 [MarkdownSerializable]

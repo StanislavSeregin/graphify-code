@@ -6,6 +6,7 @@ namespace GraphifyCode.Data.Experiment;
 [MarkdownSerializable]
 public partial class UseCase
 {
+    [MarkdownIgnore]
     public Guid Id { get; set; }
 
     [MarkdownHeader]
@@ -18,6 +19,9 @@ public partial class UseCase
     public DateTime LastAnalyzedAt { get; set; }
 
     public required UseCaseStep[] Steps { get; set; }
+
+    [MarkdownIgnore]
+    public required Service Parent { get; set; }
 }
 
 [MarkdownSerializable]

@@ -7,6 +7,7 @@ namespace GraphifyCode.Data.Experiment;
 [MarkdownSerializable]
 public partial class Service
 {
+    [MarkdownIgnore]
     public Guid Id { get; set; }
 
     [MarkdownHeader]
