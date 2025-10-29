@@ -1,5 +1,6 @@
 ﻿using GraphifyCode.Markdown;
 using System;
+using System.Collections.Generic;
 
 namespace GraphifyCode.Data.Experiment;
 
@@ -18,7 +19,7 @@ public partial class UseCase
 
     public DateTime LastAnalyzedAt { get; set; }
 
-    public required UseCaseStep[] Steps { get; set; }
+    public required List<UseCaseStep> Steps { get; set; }
 
     [MarkdownIgnore]
     public required Service Parent { get; set; }

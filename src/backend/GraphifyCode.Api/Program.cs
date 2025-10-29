@@ -1,5 +1,5 @@
+using GraphifyCode.Data;
 using GraphifyCode.Data.Services;
-using GraphifyCode.Data.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,14 +15,12 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // Configure logging
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
 
-        // Configure settings from appsettings.json and environment variables
-        builder.Services.Configure<MarkdownStorageSettings>(builder.Configuration.GetSection("MarkdownStorage"));
+        builder.Services.AddGraphifyContext(builder.Configuration);
+        builder.Services.AddHostedService<TestService>();
 
-        // Add services to the container
         builder.Services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
@@ -34,14 +32,12 @@ public class Program
             });
         });
 
-        // Register data service
         builder.Services.AddSingleton<IDataService, DataService>();
 
         var app = builder.Build();
 
         app.UseCors();
 
-        // GET /api/full-graph - Get all data
         app.MapGet("/api/full-graph", async (IDataService dataService, CancellationToken cancellationToken) =>
         {
             var fullGraph = await dataService.GetFullGraph(cancellationToken);

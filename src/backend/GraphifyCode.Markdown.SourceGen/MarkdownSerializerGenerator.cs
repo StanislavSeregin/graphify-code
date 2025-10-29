@@ -157,7 +157,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             // Group handlers by type
             var primitiveHandlers = handlers.Where(h => h is PrimitivePropertyHandler).ToList();
             var nestedHandlers = handlers.Where(h => h is NestedObjectPropertyHandler).ToList();
-            var arrayHandlers = handlers.Where(h => h is ArrayPropertyHandler || h is ArrayOfObjectsPropertyHandler).ToList();
+            var arrayHandlers = handlers.Where(h => h is ArrayPropertyHandler || h is ArrayOfObjectsPropertyHandler || h is ListPropertyHandler || h is ListOfObjectsPropertyHandler).ToList();
 
             // Parse primitive properties
             if (primitiveHandlers.Any())
@@ -210,6 +210,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             var propertyType = property.Type;
 
+            // Handle arrays: T[]
             if (propertyType is IArrayTypeSymbol arrayType)
             {
                 var elementType = arrayType.ElementType;
@@ -218,9 +219,28 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     : new ArrayOfObjectsPropertyHandler(property, elementType);
             }
 
+            // Handle lists: List<T>
+            if (propertyType is INamedTypeSymbol namedType && IsListType(namedType))
+            {
+                var elementType = namedType.TypeArguments[0];
+                return IsPrimitiveOrString(elementType)
+                    ? new ListPropertyHandler(property, elementType)
+                    : new ListOfObjectsPropertyHandler(property, elementType);
+            }
+
             return IsPrimitiveOrString(propertyType)
                 ? new PrimitivePropertyHandler(property)
                 : new NestedObjectPropertyHandler(property);
+        }
+
+        private static bool IsListType(INamedTypeSymbol type)
+        {
+            if (type.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>")
+                return true;
+
+            // Check if it implements IList<T>
+            return type.AllInterfaces.Any(i =>
+                i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IList_T);
         }
     }
 
@@ -321,14 +341,17 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         }
     }
 
-    // Handler for array of primitives
-    private class ArrayPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : PropertyHandler(property)
+    // Base handler for collection of primitives (arrays and lists)
+    private abstract class CollectionPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : PropertyHandler(property)
     {
+        protected ITypeSymbol ElementType { get; } = elementType;
+        protected abstract string ConvertToTargetType(string listVariableName);
+
         public override void GenerateSerializationCode(CodeBuilder code, int currentLevel, ref bool firstProperty)
         {
             firstProperty = false;
             var header = GetHeaderPrefix(currentLevel);
-            var formatExpr = GetFormatExpression(elementType, "item");
+            var formatExpr = GetFormatExpression(ElementType, "item");
             code.Line($$"""
                 sb.Append('\n');
                 sb.Append("{{header}} {{Property.Name}}");
@@ -345,7 +368,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             var header = GetHeaderPrefix(currentLevel);
             var listName = $"{Property.Name.ToLowerInvariant()}List";
-            var parseExpr = GetParseExpression(elementType, "value");
+            var parseExpr = GetParseExpression(ElementType, "value");
 
             code.Line($$"""
                 // Parse {{Property.Name}}
@@ -353,17 +376,29 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 if (index < lines.Length && lines[index] == "{{header}} {{Property.Name}}")
                 {
                     index++;
-                    var {{listName}} = new System.Collections.Generic.List<{{elementType.ToDisplayString()}}>();
+                    var {{listName}} = new System.Collections.Generic.List<{{ElementType.ToDisplayString()}}>();
                     while (index < lines.Length && lines[index].StartsWith("- "))
                     {
                         var value = lines[index].Substring(2);
                         {{listName}}.Add({{parseExpr}});
                         index++;
                     }
-                    obj.{{Property.Name}} = {{listName}}.ToArray();
+                    obj.{{Property.Name}} = {{ConvertToTargetType(listName)}};
                 }
                 """);
         }
+    }
+
+    // Handler for array of primitives
+    private class ArrayPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : CollectionPropertyHandler(property, elementType)
+    {
+        protected override string ConvertToTargetType(string listVariableName) => $"{listVariableName}.ToArray()";
+    }
+
+    // Handler for list of primitives
+    private class ListPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : CollectionPropertyHandler(property, elementType)
+    {
+        protected override string ConvertToTargetType(string listVariableName) => listVariableName;
     }
 
     // Handler for nested objects
@@ -414,9 +449,23 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         }
     }
 
-    // Handler for array of complex objects
-    private class ArrayOfObjectsPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : PropertyHandler(property)
+    // Base handler for collection of complex objects
+    private abstract class CollectionOfObjectsPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : PropertyHandler(property)
     {
+        protected ITypeSymbol ElementType { get; } = elementType;
+        protected abstract string ConvertToTargetType(string listVariableName);
+
+        protected static IPropertySymbol? GetMarkdownHeaderProperty(ITypeSymbol type)
+        {
+            if (type is not INamedTypeSymbol namedType)
+                return null;
+
+            return namedType.GetMembers()
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault(p => p.GetAttributes()
+                    .Any(a => a.AttributeClass?.Name is "MarkdownHeaderAttribute" or "MarkdownHeader"));
+        }
+
         public override void GenerateSerializationCode(CodeBuilder code, int currentLevel, ref bool firstProperty)
         {
             firstProperty = false;
@@ -424,7 +473,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             var nextHeader = GetHeaderPrefix(currentLevel);
 
             // Check if element type has a property marked with MarkdownHeader
-            var headerProperty = GetMarkdownHeaderProperty(elementType);
+            var headerProperty = GetMarkdownHeaderProperty(ElementType);
 
             if (headerProperty != null)
             {
@@ -483,11 +532,11 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         {
             var header = GetHeaderPrefix(currentLevel);
             var listName = $"{Property.Name.ToLowerInvariant()}List";
-            var headerProperty = GetMarkdownHeaderProperty(elementType);
+            var headerProperty = GetMarkdownHeaderProperty(ElementType);
 
             code.Line($$"""
                 // Parse {{Property.Name}}
-                var {{listName}} = new System.Collections.Generic.List<{{elementType.ToDisplayString()}}>();
+                var {{listName}} = new System.Collections.Generic.List<{{ElementType.ToDisplayString()}}>();
                 {{LineProcessingHelpers.GenerateSkipEmptyLinesCode()}}
                 while (index < lines.Length && lines[index].StartsWith("{{header}} "))
                 {
@@ -527,7 +576,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             else
             {
                 code.Line($$"""
-                        itemLines.Add("# {{elementType.Name}}");
+                        itemLines.Add("# {{ElementType.Name}}");
                     """);
             }
 
@@ -546,22 +595,23 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     }
 
                     var itemMarkdown = string.Join("\n", itemLines);
-                    {{listName}}.Add({{elementType.ToDisplayString()}}.FromMarkdown(itemMarkdown));
+                    {{listName}}.Add({{ElementType.ToDisplayString()}}.FromMarkdown(itemMarkdown));
                 }
-                obj.{{Property.Name}} = {{listName}}.ToArray();
+                obj.{{Property.Name}} = {{ConvertToTargetType(listName)}};
                 """);
         }
+    }
 
-        private static IPropertySymbol? GetMarkdownHeaderProperty(ITypeSymbol type)
-        {
-            if (type is not INamedTypeSymbol namedType)
-                return null;
+    // Handler for array of complex objects
+    private class ArrayOfObjectsPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : CollectionOfObjectsPropertyHandler(property, elementType)
+    {
+        protected override string ConvertToTargetType(string listVariableName) => $"{listVariableName}.ToArray()";
+    }
 
-            return namedType.GetMembers()
-                .OfType<IPropertySymbol>()
-                .FirstOrDefault(p => p.GetAttributes()
-                    .Any(a => a.AttributeClass?.Name is "MarkdownHeaderAttribute" or "MarkdownHeader"));
-        }
+    // Handler for list of complex objects
+    private class ListOfObjectsPropertyHandler(IPropertySymbol property, ITypeSymbol elementType) : CollectionOfObjectsPropertyHandler(property, elementType)
+    {
+        protected override string ConvertToTargetType(string listVariableName) => listVariableName;
     }
 
     // Helper methods for line splitting and processing

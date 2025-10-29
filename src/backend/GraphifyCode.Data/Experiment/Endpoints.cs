@@ -1,12 +1,13 @@
 ﻿using GraphifyCode.Markdown;
 using System;
+using System.Collections.Generic;
 
 namespace GraphifyCode.Data.Experiment;
 
 [MarkdownSerializable]
 public partial class Endpoints
 {
-    public required Endpoint[] EndpointList { get; set; }
+    public required List<Endpoint> EndpointList { get; set; }
 
     [MarkdownIgnore]
     public required Service Parent { get; set; }
