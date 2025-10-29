@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -62,7 +63,13 @@ internal static class EntityLoader
             },
             Remover: (filePath, entity, ct) =>
             {
-                File.Delete(filePath);
+                if (filePath is { } fp
+                    && Path.GetDirectoryName(fp) is { } dirPath
+                    && Directory.Exists(dirPath))
+                {
+                    Directory.Delete(dirPath, recursive: true);
+                }
+
                 return Task.CompletedTask;
             }
         ),
@@ -84,7 +91,11 @@ internal static class EntityLoader
             },
             Remover: (filePath, entity, ct) =>
             {
-                File.Delete(filePath);
+                if (filePath is { } fp && File.Exists(fp))
+                {
+                    File.Delete(filePath);
+                }
+
                 return Task.CompletedTask;
             }
         ),
@@ -119,7 +130,11 @@ internal static class EntityLoader
             },
             Remover: (filePath, entity, ct) =>
             {
-                File.Delete(filePath);
+                if (filePath is { } fp && File.Exists(fp))
+                {
+                    File.Delete(filePath);
+                }
+
                 return Task.CompletedTask;
             }
         )
@@ -132,7 +147,7 @@ internal static class EntityLoader
     {
         return Loaders.TryGetValue(typeof(TEntity), out var loaderObj) && loaderObj is Loader<TEntity> loader
             ? loader.Load(pathContext, cancellationToken)
-            : throw new InvalidOperationException($"No loader registered for type {typeof(TEntity).Name}");
+            : AsyncEnumerable.Empty<TEntity>();
     }
 
     public static Task Write<TEntity>(
@@ -143,7 +158,7 @@ internal static class EntityLoader
     {
         return Loaders.TryGetValue(typeof(TEntity), out var loaderObj) && loaderObj is Loader<TEntity> loader
             ? loader.Write(pathContext, entity, cancellationToken)
-            : throw new InvalidOperationException($"No loader registered for type {typeof(TEntity).Name}");
+            : Task.CompletedTask;
     }
 
     public static Task Remove<TEntity>(
@@ -154,7 +169,7 @@ internal static class EntityLoader
     {
         return Loaders.TryGetValue(typeof(TEntity), out var loaderObj) && loaderObj is Loader<TEntity> loader
             ? loader.Remove(pathContext, entity, cancellationToken)
-            : throw new InvalidOperationException($"No loader registered for type {typeof(TEntity).Name}");
+            : Task.CompletedTask;
     }
 }
 
