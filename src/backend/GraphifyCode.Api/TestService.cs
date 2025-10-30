@@ -17,6 +17,14 @@ public class TestService(IServiceProvider serviceProvider) : IHostedService
         var context = scope.ServiceProvider.GetRequiredService<GraphifyContext>();
         await context.EnsureDataLoadedAsync(cancellationToken);
         var services = await context.Services.ToArrayAsync(cancellationToken);
+
+        var usecase = services
+            .Where(s => s.Id == Guid.Parse("b4562db7-4d58-430e-a288-42837cecae41"))
+            .SelectMany(s => s.UseCases)
+            .First();
+
+        usecase.Description = usecase.Description + "!";
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

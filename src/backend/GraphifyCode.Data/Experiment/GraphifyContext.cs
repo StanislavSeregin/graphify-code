@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -77,7 +78,7 @@ public class GraphifyContext(
     {
         if (!_isDataLoaded)
         {
-            await foreach (var service in EntityLoader.Load<Service>(_pathContext, cancellationToken))
+            await foreach (var service in EntityDriver.Load<Service>(_pathContext, cancellationToken))
             {
                 Services.Add(service);
             }
@@ -97,12 +98,28 @@ public class GraphifyContext(
         await _fileSystemLock.WaitAsync(cancellationToken);
         try
         {
-            foreach (var entry in ChangeTracker.Entries())
+            ChangeTracker.DetectChanges();
+            var entries = ChangeTracker.Entries();
+            foreach (var entry in entries.Where(e => e.State is EntityState.Unchanged))
+            {
+                var ownedCollectionNames = EntityDriver.GetOwnedCollectionNames(entry.Entity);
+                var shouldMarkedAsModified = ownedCollectionNames.Any(collectionName => entry
+                    .Collection(collectionName).CurrentValue
+                    ?.Cast<object>()
+                    .Any(item => Entry(item).State is not EntityState.Unchanged) is true);
+
+                if (shouldMarkedAsModified)
+                {
+                    entry.State = EntityState.Modified;
+                }
+            }
+
+            foreach (var entry in entries)
             {
                 await (entry.State switch
                 {
-                    EntityState.Added or EntityState.Modified => EntityLoader.Write(_pathContext, entry.Entity, cancellationToken),
-                    EntityState.Deleted => EntityLoader.Remove(_pathContext, entry.Entity, cancellationToken),
+                    EntityState.Added or EntityState.Modified => EntityDriver.Write(_pathContext, entry.Entity, cancellationToken),
+                    EntityState.Deleted => EntityDriver.Remove(_pathContext, entry.Entity, cancellationToken),
                     _ => Task.CompletedTask
                 });
             }
