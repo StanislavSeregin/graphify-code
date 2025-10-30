@@ -14,30 +14,23 @@ public class Program
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-
-        builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
-
-        builder.Services.AddGraphifyContext(builder.Configuration);
-        builder.Services.AddHostedService<TestService>();
-
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
+        builder.Services
+            .AddCors(options =>
             {
-                policy
-                    .AllowAnyOrigin()
-                    .AllowAnyMethod()
-                    .AllowAnyHeader();
-            });
-        });
-
-        builder.Services.AddSingleton<IDataService, DataService>();
+                options.AddDefaultPolicy(policy =>
+                {
+                    policy
+                        .AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader();
+                });
+            })
+            .AddGraphifyContext(builder.Configuration)
+            .AddSingleton<IDataService, DataService>();
 
         var app = builder.Build();
-
         app.UseCors();
-
         app.MapGet("/api/full-graph", async (IDataService dataService, CancellationToken cancellationToken) =>
         {
             var fullGraph = await dataService.GetFullGraph(cancellationToken);

@@ -1,25 +1,21 @@
 ﻿using GraphifyCode.Data.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Options;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace GraphifyCode.Data.Experiment;
 
-public class GraphifyContext(
-    IOptions<MarkdownStorageSettings> settings
-) : DbContext
+public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbContext
 {
     private static readonly SemaphoreSlim _fileSystemLock = new(1, 1);
     private readonly string _pathContext = settings.Value.Path;
     private bool _isDataLoaded = false;
 
-    public DbSet<Service> Services { get; set; } = null!;
+    public DbSet<Service> Services { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -118,81 +114,58 @@ public class GraphifyContext(
     {
         foreach (var entry in entries.Where(e => e.State is EntityState.Unchanged))
         {
-            var ownedCollectionNames = EntityDriver.GetOwnedCollectionNames(entry.Entity);
-            if (HasChangesInOwnedCollections(entry, ownedCollectionNames, entries))
+            var hasChangesInOwnedCollections = EntityDriver
+                .GetOwnedCollectionNames(entry.Entity)
+                .Any(collectionName =>
+                {
+                    var hasModifiedInCurrent = entry
+                        .Collection(collectionName).CurrentValue
+                        ?.Cast<object>()
+                        .Any(item => Entry(item).State is not EntityState.Unchanged) is true;
+
+                    var hasAddedOrDeleted = entries.Any(e => e.State is EntityState.Added or EntityState.Deleted
+                        && e.Metadata.IsOwned()
+                        && e.Metadata.FindOwnership() is { } ownership
+                        && ownership.PrincipalToDependent?.Name == collectionName
+                        && ReferenceEquals(ownership.PrincipalToDependent.DeclaringEntityType.ClrType, entry.Metadata.ClrType)
+                        && ownership.PrincipalKey.Properties
+                            .Zip(ownership.Properties)
+                            .Select(item => (
+                                ParentKeyValue: entry.Property(item.First.Name).CurrentValue,
+                                OwnedFkValue: e.Property(item.Second.Name).CurrentValue
+                            ))
+                            .All(item => Equals(item.ParentKeyValue, item.OwnedFkValue)));
+
+                    return hasModifiedInCurrent || hasAddedOrDeleted;
+                });
+
+            if (hasChangesInOwnedCollections)
             {
                 entry.State = EntityState.Modified;
             }
         }
     }
 
-    private bool HasChangesInOwnedCollections(EntityEntry parentEntry, IEnumerable<string> ownedCollectionNames, EntityEntry[] allEntries)
-    {
-        return ownedCollectionNames.Any(collectionName =>
-        {
-            var hasModifiedInCurrent = parentEntry
-                .Collection(collectionName).CurrentValue
-                ?.Cast<object>()
-                .Any(item => Entry(item).State is not EntityState.Unchanged) is true;
-
-            var hasAddedOrDeleted = allEntries.Any(e => IsOwnedEntityWithChanges(e, collectionName, parentEntry));
-            return hasModifiedInCurrent || hasAddedOrDeleted;
-        });
-    }
-
-    private static bool IsOwnedEntityWithChanges(EntityEntry ownedEntry, string expectedCollectionName, EntityEntry parentEntry)
-    {
-
-        return ownedEntry.State is EntityState.Added or EntityState.Deleted
-            && ownedEntry.Metadata.IsOwned()
-            && ownedEntry.Metadata.FindOwnership() is { } ownership
-            && ownership.PrincipalToDependent?.Name == expectedCollectionName
-            && ReferenceEquals(ownership.PrincipalToDependent.DeclaringEntityType.ClrType, parentEntry.Metadata.ClrType)
-            && HasMatchingForeignKey(ownedEntry, parentEntry, ownership);
-    }
-
-    private static bool HasMatchingForeignKey(EntityEntry ownedEntry, EntityEntry parentEntry, IForeignKey ownership)
-    {
-        return ownership.PrincipalKey.Properties
-            .Zip(ownership.Properties)
-            .Select(item => (
-                ParentKeyValue: parentEntry.Property(item.First.Name).CurrentValue,
-                OwnedFkValue: ownedEntry.Property(item.Second.Name).CurrentValue
-            ))
-            .All(item => Equals(item.ParentKeyValue, item.OwnedFkValue));
-    }
-
     private static void SyncDeletedOwnedEntitiesFromCollections(EntityEntry[] entries)
     {
-        var deletedOwnedEntities = entries.Where(e => e.State == EntityState.Deleted && e.Metadata.IsOwned());
-        foreach (var deletedEntry in deletedOwnedEntities)
+        foreach (var deletedEntry in entries.Where(e => e.State == EntityState.Deleted && e.Metadata.IsOwned()))
         {
-            if (deletedEntry.Metadata.FindOwnership() is { } ownership
-                && FindParentEntry(deletedEntry, ownership, entries) is { } parentEntry)
+            if (deletedEntry.Metadata.FindOwnership() is { } ownership)
             {
-                RemoveFromParentCollection(deletedEntry, parentEntry, ownership);
+                var parentEntry = entries
+                    .Where(e => e.Metadata.ClrType == ownership.PrincipalEntityType.ClrType && ownership.PrincipalKey.Properties
+                        .Zip(ownership.Properties)
+                        .All(pair => Equals(e.Property(pair.First.Name).CurrentValue, deletedEntry.Property(pair.Second.Name).CurrentValue)))
+                    .FirstOrDefault();
+
+                if (parentEntry is not null
+                    && ownership.PrincipalToDependent?.Name is { } collectionName
+                    && parentEntry.Collection(collectionName) is { } collectionEntry
+                    && collectionEntry.CurrentValue is System.Collections.IList list)
+                {
+                    list.Remove(deletedEntry.Entity);
+                }
             }
-        }
-    }
-
-    private static EntityEntry? FindParentEntry(EntityEntry ownedEntry, IForeignKey ownership, EntityEntry[] allEntries)
-    {
-        var parentEntityType = ownership.PrincipalEntityType;
-        var principalKey = ownership.PrincipalKey.Properties;
-        var foreignKeyProperties = ownership.Properties;
-        return allEntries.FirstOrDefault(e => e.Metadata.ClrType == parentEntityType.ClrType && principalKey
-            .Zip(foreignKeyProperties)
-            .All(pair => Equals(e.Property(pair.First.Name).CurrentValue, ownedEntry.Property(pair.Second.Name).CurrentValue))
-        );
-    }
-
-    private static void RemoveFromParentCollection(EntityEntry deletedEntry, EntityEntry parentEntry, IForeignKey ownership)
-    {
-        if (ownership.PrincipalToDependent?.Name is { } collectionName
-            && parentEntry.Collection(collectionName) is { } collectionEntry
-            && collectionEntry.CurrentValue is System.Collections.IList list)
-        {
-            list.Remove(deletedEntry.Entity);
         }
     }
 

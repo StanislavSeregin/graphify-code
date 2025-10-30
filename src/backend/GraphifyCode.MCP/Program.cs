@@ -1,4 +1,5 @@
-﻿using GraphifyCode.Data.Services;
+﻿using GraphifyCode.Data;
+using GraphifyCode.Data.Services;
 using GraphifyCode.Data.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,7 @@ public class Program
                 Console.WriteLine($"Selected path is {options.Path}");
             })
             .AddSingleton<IDataService, DataService>()
+            .AddGraphifyContext(builder.Configuration)
             .AddMcpServer()
             .WithHttpTransport()
             .WithToolsFromAssembly();
