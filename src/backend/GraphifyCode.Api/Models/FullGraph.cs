@@ -7,50 +7,53 @@ namespace GraphifyCode.Api.Models;
 
 public class FullGraph
 {
-    public ServiceData[] Services { get; set; }
+    public required ServiceData[] Services { get; set; }
 
-    public FullGraph(IEnumerable<Service> services)
+    public static FullGraph FromEntities(IEnumerable<Service> services)
     {
-        Services = [.. services.Select(srv => new ServiceData()
+        return new FullGraph()
         {
-            Service = new ServiceModel()
+            Services = [.. services.Select(srv => new ServiceData()
             {
-                Id = srv.Id,
-                Name = srv.Name,
-                Description = srv.Description,
-                LastAnalyzedAt = srv.LastAnalyzedAt,
-                RelativeCodePath = srv.RelativeCodePath
-            },
-            Endpoint = [.. srv.Endpoints?.EndpointList.Select(e => new EndpointModel()
-            {
-                Id = e.Id,
-                Name = e.Name,
-                Description = e.Description,
-                Type = e.Type,
-                LastAnalyzedAt = e.LastAnalyzedAt,
-                RelativeCodePath = e.RelativeCodePath
-            }) ?? []],
-            UseCases = [.. srv.UseCases.Select(u => new UseCaseModel()
-            {
-                Id = u.Id,
-                Name = u.Name,
-                Description = u.Description,
-                InitiatingEndpointId = u.InitiatingEndpointId,
-                LastAnalyzedAt = u.LastAnalyzedAt,
-                Steps = [.. u.Steps.Select(s => new UseCaseStepModel()
+                Service = new ServiceModel()
                 {
-                    Name = s.Name,
-                    Description = s.Description,
-                    ServiceId = s.ServiceId,
-                    EndpointId = s.EndpointId,
-                    RelativeCodePath = s.RelativeCodePath
-                })]
-            })],
-            Relations = new RelationsModel()
-            {
-                TargetEndpointIds = []
-            }
-        })];
+                    Id = srv.Id,
+                    Name = srv.Name,
+                    Description = srv.Description,
+                    LastAnalyzedAt = srv.LastAnalyzedAt,
+                    RelativeCodePath = srv.RelativeCodePath
+                },
+                Endpoint = [.. srv.Endpoints?.EndpointList.Select(e => new EndpointModel()
+                {
+                    Id = e.Id,
+                    Name = e.Name,
+                    Description = e.Description,
+                    Type = e.Type,
+                    LastAnalyzedAt = e.LastAnalyzedAt,
+                    RelativeCodePath = e.RelativeCodePath
+                }) ?? []],
+                UseCases = [.. srv.UseCases.Select(u => new UseCaseModel()
+                {
+                    Id = u.Id,
+                    Name = u.Name,
+                    Description = u.Description,
+                    InitiatingEndpointId = u.InitiatingEndpointId,
+                    LastAnalyzedAt = u.LastAnalyzedAt,
+                    Steps = [.. u.Steps.Select(s => new UseCaseStepModel()
+                    {
+                        Name = s.Name,
+                        Description = s.Description,
+                        ServiceId = s.ServiceId,
+                        EndpointId = s.EndpointId,
+                        RelativeCodePath = s.RelativeCodePath
+                    })]
+                })],
+                Relations = new RelationsModel()
+                {
+                    TargetEndpointIds = []
+                }
+            })]
+        };
     }
 }
 

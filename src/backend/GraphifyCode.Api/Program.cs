@@ -27,7 +27,7 @@ public class Program
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var services = await context.Services.ToArrayAsync(cancellationToken);
-            var graph = new FullGraph(services);
+            var graph = FullGraph.FromEntities(services);
             return Results.Ok(graph);
         });
 

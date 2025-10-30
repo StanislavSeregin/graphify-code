@@ -37,19 +37,36 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         return hasAttribute ? typeSymbol : null;
     }
 
+    private static string? GetCustomHeaderName(INamedTypeSymbol typeSymbol)
+    {
+        var attribute = typeSymbol.GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.Name is "MarkdownSerializableAttribute" or "MarkdownSerializable");
+
+        if (attribute?.ConstructorArguments.Length > 0)
+        {
+            var firstArg = attribute.ConstructorArguments[0];
+            if (firstArg.Value is string headerName)
+                return headerName;
+        }
+
+        return null;
+    }
+
     private static void Execute(SourceProductionContext context, INamedTypeSymbol typeSymbol)
     {
-        var source = GenerateCode(typeSymbol);
+        var customHeaderName = GetCustomHeaderName(typeSymbol);
+        var source = GenerateCode(typeSymbol, customHeaderName);
         var fileName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             .Replace("global::", "")
             .Replace(".", "_");
         context.AddSource($"{fileName}.g.cs", SourceText.From(source, Encoding.UTF8));
     }
 
-    private static string GenerateCode(INamedTypeSymbol typeSymbol)
+    private static string GenerateCode(INamedTypeSymbol typeSymbol, string? customHeaderName)
     {
         var namespaceName = typeSymbol.ContainingNamespace.ToDisplayString();
         var typeName = typeSymbol.Name;
+        var headerName = customHeaderName ?? typeName;
         var properties = typeSymbol.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(p => p.DeclaredAccessibility == Accessibility.Public && p.GetMethod is not null)
@@ -76,9 +93,9 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                 {
                     GenerateConstructor(cls, typeName);
                     cls.Line();
-                    GenerateToMarkdownMethod(cls, typeName, propertyHandlers, headerProperty);
+                    GenerateToMarkdownMethod(cls, headerName, propertyHandlers, headerProperty);
                     cls.Line();
-                    GenerateFromMarkdownMethod(cls, typeName, propertyHandlers, headerProperty);
+                    GenerateFromMarkdownMethod(cls, typeName, headerName, propertyHandlers, headerProperty);
                 })
             );
 
@@ -92,7 +109,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             .Line($"public {typeName}() {{ }}");
     }
 
-    private static void GenerateToMarkdownMethod(CodeBuilder code, string typeName, List<PropertyHandler> handlers, IPropertySymbol? headerProperty)
+    private static void GenerateToMarkdownMethod(CodeBuilder code, string headerName, List<PropertyHandler> handlers, IPropertySymbol? headerProperty)
     {
         code.Nest("public string ToMarkdown()", method =>
         {
@@ -108,7 +125,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             {
                 method.Line($$"""
                     var sb = new System.Text.StringBuilder();
-                    sb.Append("# {{typeName}}");
+                    sb.Append("# {{headerName}}");
                     sb.Append('\n');
                     """);
             }
@@ -123,7 +140,7 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         });
     }
 
-    private static void GenerateFromMarkdownMethod(CodeBuilder code, string typeName, List<PropertyHandler> handlers, IPropertySymbol? headerProperty)
+    private static void GenerateFromMarkdownMethod(CodeBuilder code, string typeName, string headerName, List<PropertyHandler> handlers, IPropertySymbol? headerProperty)
     {
         code.Nest($"public static {typeName} FromMarkdown(string markdown)", method =>
         {
