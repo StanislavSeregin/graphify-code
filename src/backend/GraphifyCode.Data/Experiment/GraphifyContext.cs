@@ -1,8 +1,10 @@
 ﻿using GraphifyCode.Data.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System;
+using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +21,9 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
+        optionsBuilder
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .AddInterceptors(new DataLoadingInterceptor(this));
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -71,25 +75,6 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
                 step.Property(s => s.Description).IsRequired();
             });
         });
-    }
-
-    public async Task EnsureDataLoadedAsync(CancellationToken cancellationToken = default)
-    {
-        if (!_isDataLoaded)
-        {
-            await foreach (var service in EntityDriver.Load<Service>(_pathContext, cancellationToken))
-            {
-                Services.Add(service);
-            }
-
-            await base.SaveChangesAsync(cancellationToken);
-            foreach (var entry in ChangeTracker.Entries())
-            {
-                entry.State = EntityState.Unchanged;
-            }
-
-            _isDataLoaded = true;
-        }
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -179,6 +164,38 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
                 EntityState.Deleted => EntityDriver.Remove(_pathContext, entry.Entity, cancellationToken),
                 _ => Task.CompletedTask
             });
+        }
+    }
+
+    private async Task EnsureDataLoadedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_isDataLoaded)
+        {
+            await foreach (var service in EntityDriver.Load<Service>(_pathContext, cancellationToken))
+            {
+                Services.Add(service);
+            }
+
+            await base.SaveChangesAsync(cancellationToken);
+            foreach (var entry in ChangeTracker.Entries())
+            {
+                entry.State = EntityState.Unchanged;
+            }
+
+            _isDataLoaded = true;
+        }
+    }
+
+    private class DataLoadingInterceptor(GraphifyContext context) : IDbConnectionInterceptor
+    {
+        public async ValueTask<InterceptionResult> ConnectionOpeningAsync(
+            DbConnection connection,
+            ConnectionEventData eventData,
+            InterceptionResult result,
+            CancellationToken cancellationToken = default)
+        {
+            await context.EnsureDataLoadedAsync(cancellationToken);
+            return result;
         }
     }
 }
