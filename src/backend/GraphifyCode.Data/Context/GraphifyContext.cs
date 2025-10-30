@@ -1,4 +1,5 @@
-﻿using GraphifyCode.Data.Settings;
+﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Options;
@@ -7,7 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace GraphifyCode.Data.Experiment;
+namespace GraphifyCode.Data.Context;
 
 public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbContext
 {

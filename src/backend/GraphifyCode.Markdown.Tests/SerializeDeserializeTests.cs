@@ -10,7 +10,7 @@ public class SerializeDeserializeTests
 {
     private static readonly Service ServiceData = new()
     {
-        Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+        Id = Guid.Empty,
         Name = "UserService",
         Description = "Handles user authentication and management",
         LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
@@ -19,7 +19,6 @@ public class SerializeDeserializeTests
 
     private static readonly string ServiceMarkdown = """
         # UserService
-        - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Handles user authentication and management
         - LastAnalyzedAt: 15.10.2024 14:30:00
         - RelativeCodePath: src/services/UserService.cs
@@ -47,7 +46,7 @@ public class SerializeDeserializeTests
 
     private static readonly Service ServiceDataWithMultiline = new()
     {
-        Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+        Id = Guid.Empty,
         Name = "UserService",
         Description = """
         Handles user authentication and management.
@@ -59,7 +58,6 @@ public class SerializeDeserializeTests
 
     private static readonly string ServiceMarkdownWithMultiline = """
         # UserService
-        - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Handles user authentication and management.
         And some else...
         - LastAnalyzedAt: 15.10.2024 14:30:00
@@ -149,46 +147,9 @@ public class SerializeDeserializeTests
         obj.Should().BeEquivalentTo(EndpointsData);
     }
 
-    private static readonly Relations RelationsData = new()
-    {
-        TargetEndpointIds =
-        [
-            Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
-            Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e")
-        ]
-    };
-
-    private static readonly string RelationsMarkdown = """
-        # Relations
-
-        ## TargetEndpointIds
-        - 89b71ddd-553a-4861-9383-f9ce24494c3e
-        - c97aa83a-8947-49d9-b1a3-d61bc47e361e
-        """.ReplaceLineEndings("\n");
-
-    [Test]
-    public void Serialize_Relations_MarkdownShouldBeExpected()
-    {
-        // Act
-        var markdown = RelationsData.ToMarkdown();
-
-        // Assert
-        markdown.Should().Be(RelationsMarkdown);
-    }
-
-    [Test]
-    public void Deserialize_Relations_ObjectShouldBeExpected()
-    {
-        // Act
-        var obj = Relations.FromMarkdown(RelationsMarkdown);
-
-        // Assert
-        obj.Should().BeEquivalentTo(RelationsData);
-    }
-
     private static readonly UseCase UseCaseData = new()
     {
-        Id = Guid.Parse("a1b2c3d4-e5f6-4789-a012-3456789abcde"),
+        Id = Guid.Empty,
         Name = "User Registration",
         Description = "Complete user registration flow",
         InitiatingEndpointId = Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e"),
@@ -216,7 +177,6 @@ public class SerializeDeserializeTests
 
     private static readonly string UseCaseMarkdown = """
         # User Registration
-        - Id: a1b2c3d4-e5f6-4789-a012-3456789abcde
         - Description: Complete user registration flow
         - InitiatingEndpointId: c97aa83a-8947-49d9-b1a3-d61bc47e361e
         - LastAnalyzedAt: 15.10.2024 14:30:00

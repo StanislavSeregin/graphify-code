@@ -1,12 +1,16 @@
-using GraphifyCode.Markdown;
+﻿using GraphifyCode.Markdown;
 using System;
+using System.Collections.Generic;
 
 namespace GraphifyCode.Data.Entities;
 
 [MarkdownSerializable]
 public partial class Endpoints
 {
-    public required Endpoint[] EndpointList { get; set; }
+    public required List<Endpoint> EndpointList { get; set; }
+
+    [MarkdownIgnore]
+    public required Service Parent { get; set; }
 }
 
 [MarkdownSerializable]
@@ -24,18 +28,4 @@ public partial class Endpoint
     public DateTime LastAnalyzedAt { get; set; }
 
     public string? RelativeCodePath { get; set; }
-}
-
-public static class EndpointTypes
-{
-    public const string Http = "http";
-
-    public const string Queue = "queue";
-
-    public const string Job = "job";
-
-    public static bool IsValidEndpointType(string type)
-    {
-        return type == Http || type == Queue || type == Job;
-    }
 }

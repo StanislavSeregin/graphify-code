@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace GraphifyCode.Data.Experiment;
+namespace GraphifyCode.Data.Entities;
 
 [MarkdownSerializable]
 public partial class UseCase
