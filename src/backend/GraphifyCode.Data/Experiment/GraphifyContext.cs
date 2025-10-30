@@ -1,10 +1,8 @@
 ﻿using GraphifyCode.Data.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System;
-using System.Data.Common;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +11,7 @@ namespace GraphifyCode.Data.Experiment;
 
 public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbContext
 {
-    private static readonly SemaphoreSlim _fileSystemLock = new(1, 1);
+    private static readonly SemaphoreSlim _lock = new(1, 1);
     private readonly string _pathContext = settings.Value.Path;
     private bool _isDataLoaded = false;
 
@@ -21,9 +19,7 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .AddInterceptors(new DataLoadingInterceptor(this));
+        optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -77,9 +73,36 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
         });
     }
 
+    public async Task EnsureDataLoadedAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            if (!_isDataLoaded)
+            {
+                await foreach (var service in EntityDriver.Load<Service>(_pathContext, cancellationToken))
+                {
+                    Services.Add(service);
+                }
+
+                await base.SaveChangesAsync(cancellationToken);
+                foreach (var entry in ChangeTracker.Entries())
+                {
+                    entry.State = EntityState.Unchanged;
+                }
+
+                _isDataLoaded = true;
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        await _fileSystemLock.WaitAsync(cancellationToken);
+        await _lock.WaitAsync(cancellationToken);
         try
         {
             ChangeTracker.DetectChanges();
@@ -91,7 +114,7 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
         }
         finally
         {
-            _fileSystemLock.Release();
+            _lock.Release();
         }
     }
 
@@ -164,38 +187,6 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
                 EntityState.Deleted => EntityDriver.Remove(_pathContext, entry.Entity, cancellationToken),
                 _ => Task.CompletedTask
             });
-        }
-    }
-
-    private async Task EnsureDataLoadedAsync(CancellationToken cancellationToken = default)
-    {
-        if (!_isDataLoaded)
-        {
-            await foreach (var service in EntityDriver.Load<Service>(_pathContext, cancellationToken))
-            {
-                Services.Add(service);
-            }
-
-            await base.SaveChangesAsync(cancellationToken);
-            foreach (var entry in ChangeTracker.Entries())
-            {
-                entry.State = EntityState.Unchanged;
-            }
-
-            _isDataLoaded = true;
-        }
-    }
-
-    private class DataLoadingInterceptor(GraphifyContext context) : IDbConnectionInterceptor
-    {
-        public async ValueTask<InterceptionResult> ConnectionOpeningAsync(
-            DbConnection connection,
-            ConnectionEventData eventData,
-            InterceptionResult result,
-            CancellationToken cancellationToken = default)
-        {
-            await context.EnsureDataLoadedAsync(cancellationToken);
-            return result;
         }
     }
 }

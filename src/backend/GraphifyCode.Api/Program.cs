@@ -1,7 +1,9 @@
+using GraphifyCode.Api.Models;
 using GraphifyCode.Data;
-using GraphifyCode.Data.Services;
+using GraphifyCode.Data.Experiment;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Threading;
@@ -16,25 +18,17 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.Logging.AddConsole();
         builder.Services
-            .AddCors(options =>
-            {
-                options.AddDefaultPolicy(policy =>
-                {
-                    policy
-                        .AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader();
-                });
-            })
-            .AddGraphifyContext(builder.Configuration)
-            .AddSingleton<IDataService, DataService>();
+            .AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()))
+            .AddGraphifyContext(builder.Configuration);
 
         var app = builder.Build();
         app.UseCors();
-        app.MapGet("/api/full-graph", async (IDataService dataService, CancellationToken cancellationToken) =>
+        app.MapGet("/api/full-graph", async (GraphifyContext context, CancellationToken cancellationToken) =>
         {
-            var fullGraph = await dataService.GetFullGraph(cancellationToken);
-            return Results.Ok(fullGraph);
+            await context.EnsureDataLoadedAsync(cancellationToken);
+            var services = await context.Services.ToArrayAsync(cancellationToken);
+            var graph = new FullGraph(services);
+            return Results.Ok(graph);
         });
 
         await app.RunAsync();
