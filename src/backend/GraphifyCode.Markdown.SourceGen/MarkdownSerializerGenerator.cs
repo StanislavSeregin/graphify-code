@@ -220,6 +220,12 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         public abstract void GenerateSerializationCode(CodeBuilder code, int currentLevel, ref bool firstProperty, PropertyHandler? previousHandler);
         public abstract void GenerateDeserializationCode(CodeBuilder code, int currentLevel);
 
+        /// <summary>
+        /// Indicates whether this handler adds an extra newline after rendering its content.
+        /// This is used by subsequent handlers to determine proper spacing.
+        /// </summary>
+        public virtual bool EndsWithTrailingNewline() => false;
+
         protected static string GetHeaderPrefix(int level) => new('#', level + 1);
     }
 
@@ -475,6 +481,12 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
         protected ITypeSymbol ElementType { get; } = elementType;
         protected abstract string ConvertToTargetType(string listVariableName);
 
+        /// <summary>
+        /// Collections of objects add \n after each element (including the last one)
+        /// to separate items within the collection.
+        /// </summary>
+        public override bool EndsWithTrailingNewline() => true;
+
         protected static IPropertySymbol? GetMarkdownHeaderProperty(ITypeSymbol type)
         {
             if (type is not INamedTypeSymbol namedType)
@@ -501,46 +513,122 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
             return null;
         }
 
+        /// <summary>
+        /// Generates code for optional SubHeader that appears before collection items.
+        /// SubHeader adds spacing intelligently based on whether previous handler ended with newline.
+        /// </summary>
+        private void GenerateSubHeaderCode(CodeBuilder code, string subHeaderText, int currentLevel, PropertyHandler? previousHandler)
+        {
+            var subHeader = GetHeaderPrefix(currentLevel);
+            // SubHeader needs leading \n for spacing UNLESS the previous property already
+            // ended with trailing \n (e.g., collections of objects add \n after each element).
+            // This ensures consistent single blank line between sections.
+            var previousEndsWithNewline = previousHandler?.EndsWithTrailingNewline() ?? false;
+
+            code.Line($$"""
+                if ({{Property.Name}}.Any())
+                {
+                """);
+
+            // Only add leading \n if previous handler did NOT end with a newline
+            if (!previousEndsWithNewline)
+            {
+                code.Line($$"""
+                        sb.Append('\n');
+                    """);
+            }
+
+            code.Line($$"""
+                    sb.Append("{{subHeader}} {{subHeaderText}}");
+                    sb.Append('\n');
+                    sb.Append('\n');
+                }
+                """);
+        }
+
+        /// <summary>
+        /// Generates code to serialize collection items when element type has MarkdownHeader property.
+        /// This version extracts the header property value and uses it as section header.
+        /// </summary>
+        private void GenerateItemsWithHeaderProperty(CodeBuilder code, IPropertySymbol headerProperty, string currentHeader, string nextHeader, int currentLevel, bool hasSubHeader)
+        {
+            // Calculate the prefix for adjusted nested headers
+            var adjustedHeaderPrefix = nextHeader.Substring(0, hasSubHeader ? currentLevel + 1 : currentLevel);
+            var headerAdjustmentOffset = currentLevel - 1;
+
+            code.Line($$"""
+                foreach (var item in {{Property.Name}})
+                {
+                    var itemMarkdown = item.ToMarkdown();
+                    var itemLines = itemMarkdown.Split({{LineProcessingHelpers.SplitLinesPattern}});
+                    sb.Append($"{{nextHeader}} {item.{{headerProperty.Name}}}");
+                    sb.Append('\n');
+                    // Process lines: skip header (i=0), filter header property line, adjust nested headers
+                    for (int i = 1; i < itemLines.Length; i++)
+                    {
+                        var line = itemLines[i];
+                        // Preserve empty lines as they may be part of multiline content
+                        if (string.IsNullOrEmpty(line))
+                        {
+                            sb.Append('\n');
+                            continue;
+                        }
+                        // Skip the header property line as it's already in the section header
+                        if (line.StartsWith("- {{headerProperty.Name}}: "))
+                            continue;
+                        // Adjust nested header levels
+                        if (line.StartsWith("{{currentHeader}}"))
+                        {
+                            var adjustedLine = line.Substring({{headerAdjustmentOffset}}).Insert(0, "{{adjustedHeaderPrefix}}");
+                            sb.Append(adjustedLine);
+                            sb.Append('\n');
+                        }
+                        else
+                        {
+                            sb.Append(line);
+                            sb.Append('\n');
+                        }
+                    }
+                    sb.Append('\n');
+                }
+                """);
+        }
+
+        /// <summary>
+        /// Generates code to serialize collection items when element type lacks MarkdownHeader property.
+        /// This simpler version just replaces header prefixes.
+        /// </summary>
+        private void GenerateItemsWithoutHeaderProperty(CodeBuilder code, string currentHeader, string nextHeader)
+        {
+            code.Line($$"""
+                foreach (var item in {{Property.Name}})
+                {
+                    sb.Append(item.ToMarkdown().Replace("{{currentHeader}} ", "{{nextHeader}} "));
+                    sb.Append('\n');
+                    sb.Append('\n');
+                }
+                """);
+        }
+
         public override void GenerateSerializationCode(CodeBuilder code, int currentLevel, ref bool firstProperty, PropertyHandler? previousHandler)
         {
             firstProperty = false;
             var subHeaderText = GetSubHeaderText(Property);
+            var hasSubHeader = subHeaderText != null;
 
             // Determine header levels based on whether SubHeader is present
             var currentHeader = new string('#', currentLevel);
-            var nextHeader = subHeaderText != null
+            var nextHeader = hasSubHeader
                 ? GetHeaderPrefix(currentLevel + 1)  // If SubHeader exists, increase nesting by 1
                 : GetHeaderPrefix(currentLevel);
 
             // Check if element type has a property marked with MarkdownHeader
             var headerProperty = GetMarkdownHeaderProperty(ElementType);
 
-            // If SubHeader is specified, add it before the collection (only if collection has items)
-            if (subHeaderText != null)
+            // Generate optional SubHeader or default separator
+            if (hasSubHeader)
             {
-                var subHeader = GetHeaderPrefix(currentLevel);
-                // Check if previous handler was a collection of objects (which adds trailing \n)
-                var previousWasObjectCollection = previousHandler is CollectionOfObjectsPropertyHandler or ArrayOfObjectsPropertyHandler or ListOfObjectsPropertyHandler;
-
-                code.Line($$"""
-                    if ({{Property.Name}}.Any())
-                    {
-                    """);
-
-                // Only add leading \n if previous handler was NOT a collection of objects
-                if (!previousWasObjectCollection)
-                {
-                    code.Line($$"""
-                            sb.Append('\n');
-                        """);
-                }
-
-                code.Line($$"""
-                        sb.Append("{{subHeader}} {{subHeaderText}}");
-                        sb.Append('\n');
-                        sb.Append('\n');
-                    }
-                    """);
+                GenerateSubHeaderCode(code, subHeaderText, currentLevel, previousHandler);
             }
             else
             {
@@ -550,54 +638,14 @@ public class MarkdownSerializerGenerator : IIncrementalGenerator
                     """);
             }
 
+            // Generate collection items serialization
             if (headerProperty != null)
             {
-                code.Line($$"""
-                    foreach (var item in {{Property.Name}})
-                    {
-                        var itemMarkdown = item.ToMarkdown();
-                        var itemLines = itemMarkdown.Split({{LineProcessingHelpers.SplitLinesPattern}});
-                        sb.Append($"{{nextHeader}} {item.{{headerProperty.Name}}}");
-                        sb.Append('\n');
-                        // Process lines: skip header (i=0), filter header property line, adjust nested headers
-                        for (int i = 1; i < itemLines.Length; i++)
-                        {
-                            var line = itemLines[i];
-                            // Preserve empty lines as they may be part of multiline content
-                            if (string.IsNullOrEmpty(line))
-                            {
-                                sb.Append('\n');
-                                continue;
-                            }
-                            // Skip the header property line as it's already in the section header
-                            if (line.StartsWith("- {{headerProperty.Name}}: "))
-                                continue;
-                            // Adjust nested header levels
-                            if (line.StartsWith("{{currentHeader}}"))
-                            {
-                                sb.Append(line.Substring({{currentLevel - 1}}).Insert(0, "{{nextHeader.Substring(0, subHeaderText != null ? currentLevel + 1 : currentLevel)}}"));
-                                sb.Append('\n');
-                            }
-                            else
-                            {
-                                sb.Append(line);
-                                sb.Append('\n');
-                            }
-                        }
-                        sb.Append('\n');
-                    }
-                    """);
+                GenerateItemsWithHeaderProperty(code, headerProperty, currentHeader, nextHeader, currentLevel, hasSubHeader);
             }
             else
             {
-                code.Line($$"""
-                    foreach (var item in {{Property.Name}})
-                    {
-                        sb.Append(item.ToMarkdown().Replace("{{currentHeader}} ", "{{nextHeader}} "));
-                        sb.Append('\n');
-                        sb.Append('\n');
-                    }
-                    """);
+                GenerateItemsWithoutHeaderProperty(code, currentHeader, nextHeader);
             }
         }
 
