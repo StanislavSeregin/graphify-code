@@ -9,78 +9,18 @@ namespace GraphifyCode.Data.Models;
 [MarkdownSerializable("Services details")]
 public partial class ServicesDetails
 {
-    public required ServiceItem[] ServiceList { get; set; }
-
-    [MarkdownSerializable]
-    public partial class ServiceItem
-    {
-        public Guid Id { get; set; }
-
-        [MarkdownHeader]
-        public required string Name { get; set; }
-
-        public Endpoints? Endpoints { get; set; }
-
-        public UseCases? UseCases { get; set; }
-    }
-
-    [MarkdownSerializable("Endpoints")]
-    public partial class Endpoints
-    {
-        public required EndpointItem[] EndpointList { get; set; }
-    }
-
-    [MarkdownSerializable]
-    public partial class EndpointItem
-    {
-        public Guid Id { get; set; }
-
-        [MarkdownHeader]
-        public required string Name { get; set; }
-
-        public required string Description { get; set; }
-
-        public required string Type { get; set; }
-
-        public DateTime LastAnalyzedAt { get; set; }
-
-        public string? RelativeCodePath { get; set; }
-    }
-
-    [MarkdownSerializable("Use cases")]
-    public partial class UseCases
-    {
-        public required UseCaseItem[] UseCaseList { get; set; }
-    }
-
-    [MarkdownSerializable]
-    public partial class UseCaseItem
-    {
-        [MarkdownIgnore]
-        public Guid Id { get; set; }
-
-        [MarkdownHeader]
-        public required string Name { get; set; }
-
-        public required string Description { get; set; }
-
-        public Guid InitiatingEndpointId { get; set; }
-
-        public DateTime LastAnalyzedAt { get; set; }
-    }
+    public required DetailedService[] Services { get; set; }
 
     public static ServicesDetails FromEntities(IEnumerable<Service> services, bool withEndpoints, bool withUseCases)
     {
         return new ServicesDetails()
         {
-            ServiceList = [.. services.Select(srv => new ServiceItem()
+            Services = [.. services.Select(srv => new DetailedService()
             {
                 Id = srv.Id,
                 Name = srv.Name,
                 Endpoints = withEndpoints && srv.Endpoints?.EndpointList is { } endpoints
-                    ? new Endpoints()
-                    {
-                        EndpointList = [.. endpoints.Select(e => new EndpointItem()
+                    ? [.. endpoints.Select(e => new DetailedServiceEndpoint()
                         {
                             Id = e.Id,
                             Name = e.Name,
@@ -89,12 +29,9 @@ public partial class ServicesDetails
                             LastAnalyzedAt = e.LastAnalyzedAt,
                             RelativeCodePath = e.RelativeCodePath
                         })]
-                    }
-                    : null,
+                    : [],
                 UseCases = withUseCases && srv.UseCases is { } useCases
-                    ? new UseCases()
-                    {
-                        UseCaseList = [.. useCases.Select(u => new UseCaseItem()
+                    ? [.. useCases.Select(u => new DetailedServiceUseCase()
                         {
                             Id = u.Id,
                             Name = u.Name,
@@ -102,9 +39,56 @@ public partial class ServicesDetails
                             InitiatingEndpointId = u.InitiatingEndpointId,
                             LastAnalyzedAt = u.LastAnalyzedAt
                         })]
-                    }
-                    : null
+                    : []
             })]
         };
     }
+}
+
+[MarkdownSerializable]
+public partial class DetailedService
+{
+    public Guid Id { get; set; }
+
+    [MarkdownHeader]
+    public required string Name { get; set; }
+
+    [MarkdownSubHeader("Endpoints")]
+    public required DetailedServiceEndpoint[] Endpoints { get; set; }
+
+    [MarkdownSubHeader("Use cases")]
+    public required DetailedServiceUseCase[] UseCases { get; set; }
+}
+
+[MarkdownSerializable]
+public partial class DetailedServiceEndpoint
+{
+    public Guid Id { get; set; }
+
+    [MarkdownHeader]
+    public required string Name { get; set; }
+
+    public required string Description { get; set; }
+
+    public required string Type { get; set; }
+
+    public DateTime LastAnalyzedAt { get; set; }
+
+    public string? RelativeCodePath { get; set; }
+}
+
+[MarkdownSerializable]
+public partial class DetailedServiceUseCase
+{
+    [MarkdownIgnore]
+    public Guid Id { get; set; }
+
+    [MarkdownHeader]
+    public required string Name { get; set; }
+
+    public required string Description { get; set; }
+
+    public Guid InitiatingEndpointId { get; set; }
+
+    public DateTime LastAnalyzedAt { get; set; }
 }

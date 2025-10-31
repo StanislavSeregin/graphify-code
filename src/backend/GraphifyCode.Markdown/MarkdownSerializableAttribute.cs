@@ -39,3 +39,25 @@ public class MarkdownHeaderAttribute : Attribute { /* NOTHING */ }
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
 public class MarkdownIgnoreAttribute : Attribute { /* NOTHING */ }
+
+/// <summary>
+/// Marks a collection property that should be rendered with an intermediate subheader.
+/// This increases the nesting level of collection elements by adding a header before them.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
+public class MarkdownSubHeaderAttribute : Attribute
+{
+    /// <summary>
+    /// Gets the subheader text to display before the collection elements.
+    /// </summary>
+    public string SubHeaderText { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MarkdownSubHeaderAttribute"/> class.
+    /// </summary>
+    /// <param name="subHeaderText">The subheader text to display before the collection elements.</param>
+    public MarkdownSubHeaderAttribute(string subHeaderText)
+    {
+        SubHeaderText = subHeaderText ?? throw new ArgumentNullException(nameof(subHeaderText));
+    }
+}
