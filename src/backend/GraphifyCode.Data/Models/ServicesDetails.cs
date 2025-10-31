@@ -80,7 +80,6 @@ public partial class DetailedServiceEndpoint
 [MarkdownSerializable]
 public partial class DetailedServiceUseCase
 {
-    [MarkdownIgnore]
     public Guid Id { get; set; }
 
     [MarkdownHeader]
