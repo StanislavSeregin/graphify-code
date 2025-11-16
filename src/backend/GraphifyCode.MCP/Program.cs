@@ -22,6 +22,7 @@ public class Program
                 options.Path = GetDataPath();
                 Console.WriteLine($"Selected path is {options.Path}");
             })
+            .AddMediator()
             .AddGraphifyContext(builder.Configuration)
             .AddMcpServer()
             .WithHttpTransport()
