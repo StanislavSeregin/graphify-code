@@ -10,8 +10,8 @@ Instead of loading entire documentation, query specific pieces: services, endpoi
 
 ## Key Features
 
-- **Incremental queries** - `list_services`, `get_service`, `get_use_case`, `search_graph`
-- **Schema-enforced updates** - `upsert_service`, `upsert_endpoint`, `upsert_use_case`, `upsert_relation`, `remove_entity`
+- **Incremental queries** - `list_services`, `get_service`, `get_use_case`, `list_endpoints`, `list_use_cases`, `search_graph`
+- **Schema-enforced updates** - `upsert_service`, `upsert_endpoint`, `upsert_use_case`, `upsert_relation`, `bulk_upsert_endpoint`, `bulk_upsert_relation`, `remove_entity`
 - **Markdown storage** - Human-readable, version controllable, lives with your code
 - **Graph visualization** - Explore documented architecture visually
 - **Code navigation** - Direct links from documentation to source files
@@ -70,10 +70,18 @@ All tools return a unified response envelope:
 - `error: { code, message, details, retriable } | null`
 - `warnings: string[]`
 
+`error.details` is typed by error category:
+- `ValidationErrorDetails`
+- `NotFoundErrorDetails`
+- `ConflictErrorDetails`
+- `BatchErrorDetails`
+
 **Read / discover:**
 - `list_services` - All services with compact metadata and markdown snapshot
 - `get_service` - One service by ID, with optional endpoints/use cases
 - `get_use_case` - One use case by ID with detailed steps
+- `list_endpoints` - Endpoints for a service without loading full service details
+- `list_use_cases` - Use cases for a service without loading full service details
 - `search_graph` - Text search across service/endpoint/use case names, descriptions, and code paths
 
 **Write / mutate:**
@@ -81,7 +89,17 @@ All tools return a unified response envelope:
 - `upsert_endpoint` - Create or update endpoint in service
 - `upsert_use_case` - Create or update use case in service
 - `upsert_relation` - Create or update use case step relation
+- `bulk_upsert_endpoint` - Batch endpoint upsert with partial success reporting
+- `bulk_upsert_relation` - Batch relation upsert with partial success reporting
 - `remove_entity` - Remove `Service` / `Endpoint` / `UseCase` by typed enum
+
+### Batch Behavior
+
+`bulk_upsert_endpoint` and `bulk_upsert_relation` use **partial success** semantics:
+- valid items are applied;
+- failed items are returned in `data.failed[]` with per-item error details;
+- `ok=true` when at least one item succeeds;
+- `ok=false` with `error.code="batch_failed"` when all items fail.
 
 ### Usage Examples
 

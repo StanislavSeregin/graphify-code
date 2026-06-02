@@ -79,6 +79,7 @@ public class McpToolContractsTests
         response.Ok.Should().BeFalse();
         response.Error.Should().NotBeNull();
         response.Error!.Code.Should().Be("validation_error");
+        response.Error.Details.Should().BeOfType<ValidationErrorDetails>();
     }
 
     [Test]
@@ -186,5 +187,101 @@ public class McpToolContractsTests
 
         removeResult.Ok.Should().BeFalse();
         removeResult.Error!.Code.Should().Be("conflict");
+        removeResult.Error.Details.Should().BeOfType<ConflictErrorDetails>();
+    }
+
+    [Test]
+    public async Task ListEndpoints_And_ListUseCases_ShouldReturnServiceScopedCollections()
+    {
+        var service = await _tool.UpsertService(
+            new UpsertServiceRequest { Name = "Orders", Description = "Orders service" },
+            CancellationToken.None);
+
+        var endpoint = await _tool.UpsertEndpoint(
+            new UpsertEndpointRequest
+            {
+                ServiceId = service.Data!.EntityId,
+                Name = "GET /orders",
+                Description = "Get orders",
+                Type = "http"
+            },
+            CancellationToken.None);
+
+        await _tool.UpsertUseCase(
+            new UpsertUseCaseRequest
+            {
+                ServiceId = service.Data.EntityId,
+                Name = "List orders",
+                Description = "List flow",
+                InitiatingEndpointId = endpoint.Data!.EntityId
+            },
+            CancellationToken.None);
+
+        var endpointsResult = await _tool.ListEndpoints(service.Data.EntityId, CancellationToken.None);
+        var useCasesResult = await _tool.ListUseCases(service.Data.EntityId, CancellationToken.None);
+
+        endpointsResult.Ok.Should().BeTrue();
+        endpointsResult.Data!.Endpoints.Should().ContainSingle();
+        useCasesResult.Ok.Should().BeTrue();
+        useCasesResult.Data!.UseCases.Should().ContainSingle();
+    }
+
+    [Test]
+    public async Task BulkUpsertEndpoint_ShouldSupportPartialSuccess()
+    {
+        var service = await _tool.UpsertService(
+            new UpsertServiceRequest { Name = "Billing", Description = "Billing service" },
+            CancellationToken.None);
+
+        var result = await _tool.BulkUpsertEndpoint(
+            new BulkUpsertEndpointsRequest
+            {
+                Items =
+                [
+                    new UpsertEndpointRequest
+                    {
+                        ServiceId = service.Data!.EntityId,
+                        Name = "GET /billing",
+                        Description = "Billing endpoint",
+                        Type = "http"
+                    },
+                    new UpsertEndpointRequest
+                    {
+                        ServiceId = Guid.NewGuid(),
+                        Name = "GET /invalid",
+                        Description = "Invalid endpoint",
+                        Type = "http"
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        result.Ok.Should().BeTrue();
+        result.Data!.Succeeded.Should().HaveCount(1);
+        result.Data.Failed.Should().HaveCount(1);
+        result.Warnings.Should().NotBeEmpty();
+    }
+
+    [Test]
+    public async Task BulkUpsertRelation_ShouldReturnBatchFailed_WhenAllItemsFail()
+    {
+        var result = await _tool.BulkUpsertRelation(
+            new BulkUpsertRelationsRequest
+            {
+                Items =
+                [
+                    new UpsertRelationRequest
+                    {
+                        UseCaseId = Guid.NewGuid(),
+                        StepName = "Unknown",
+                        StepDescription = "Should fail"
+                    }
+                ]
+            },
+            CancellationToken.None);
+
+        result.Ok.Should().BeFalse();
+        result.Error!.Code.Should().Be("batch_failed");
+        result.Error.Details.Should().BeOfType<BatchErrorDetails>();
     }
 }

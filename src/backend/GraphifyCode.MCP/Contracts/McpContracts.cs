@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace GraphifyCode.MCP.Contracts;
 
@@ -22,7 +23,7 @@ public sealed class McpResult<TData>
         };
     }
 
-    public static McpResult<TData> Failure(string code, string message, object? details = null, bool retriable = false)
+    public static McpResult<TData> Failure(string code, string message, ErrorDetails? details = null, bool retriable = false)
     {
         return new McpResult<TData>
         {
@@ -44,7 +45,7 @@ public sealed class McpError
 
     public required string Message { get; init; }
 
-    public object? Details { get; init; }
+    public ErrorDetails? Details { get; init; }
 
     public bool Retriable { get; init; }
 }
@@ -158,4 +159,113 @@ public sealed class MutationResultData
     public required string Action { get; init; }
 
     public string? Message { get; init; }
+}
+
+public abstract class ErrorDetails;
+
+public sealed class ValidationErrorDetails : ErrorDetails
+{
+    public required string Field { get; init; }
+
+    public required string Reason { get; init; }
+}
+
+public sealed class NotFoundErrorDetails : ErrorDetails
+{
+    public required GraphEntityType EntityType { get; init; }
+
+    public required Guid EntityId { get; init; }
+}
+
+public sealed class ConflictErrorDetails : ErrorDetails
+{
+    public required GraphEntityType EntityType { get; init; }
+
+    public required Guid EntityId { get; init; }
+
+    public required Guid[] BlockingUseCaseIds { get; init; }
+}
+
+public sealed class BatchErrorDetails : ErrorDetails
+{
+    public required int FailedItems { get; init; }
+
+    public required int TotalItems { get; init; }
+}
+
+public sealed class ListEndpointsData
+{
+    public required Guid ServiceId { get; init; }
+
+    public required string ServiceName { get; init; }
+
+    public required EndpointSummary[] Endpoints { get; init; }
+}
+
+public sealed class EndpointSummary
+{
+    public required Guid EndpointId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required string Type { get; init; }
+
+    public string? RelativeCodePath { get; init; }
+}
+
+public sealed class ListUseCasesData
+{
+    public required Guid ServiceId { get; init; }
+
+    public required string ServiceName { get; init; }
+
+    public required UseCaseSummary[] UseCases { get; init; }
+}
+
+public sealed class UseCaseSummary
+{
+    public required Guid UseCaseId { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string Description { get; init; }
+
+    public required Guid InitiatingEndpointId { get; init; }
+}
+
+public sealed class BulkUpsertEndpointsRequest
+{
+    public required UpsertEndpointRequest[] Items { get; init; }
+}
+
+public sealed class BulkUpsertRelationsRequest
+{
+    public required UpsertRelationRequest[] Items { get; init; }
+}
+
+public sealed class BulkMutationData
+{
+    public required BulkMutationSuccessItem[] Succeeded { get; init; }
+
+    public required BulkMutationFailedItem[] Failed { get; init; }
+}
+
+public sealed class BulkMutationSuccessItem
+{
+    public required int Index { get; init; }
+
+    public required MutationResultData Result { get; init; }
+}
+
+public sealed class BulkMutationFailedItem
+{
+    public required int Index { get; init; }
+
+    public required string Code { get; init; }
+
+    public required string Message { get; init; }
+
+    public ErrorDetails? Details { get; init; }
 }

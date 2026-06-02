@@ -71,7 +71,14 @@ public static class UpsertEndpoint
             var service = await context.Services.FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
             if (service is null)
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Service '{request.ServiceId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Service '{request.ServiceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = request.ServiceId
+                    });
             }
 
             service.Endpoints ??= new Endpoints { Parent = service, EndpointList = [] };
@@ -127,14 +134,26 @@ public static class UpsertUseCase
             var service = await context.Services.FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
             if (service is null)
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Service '{request.ServiceId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Service '{request.ServiceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = request.ServiceId
+                    });
             }
 
             if (!HasEndpoint(service, request.InitiatingEndpointId))
             {
                 return McpResult<MutationResultData>.Failure(
                     "validation_error",
-                    "Initiating endpoint does not belong to the target service.");
+                    "Initiating endpoint does not belong to the target service.",
+                    new ValidationErrorDetails
+                    {
+                        Field = nameof(request.InitiatingEndpointId),
+                        Reason = "Endpoint must exist inside the target service."
+                    });
             }
 
             var useCase = request.UseCaseId is { } useCaseId
@@ -193,19 +212,40 @@ public static class UpsertRelation
                 .FirstOrDefaultAsync(s => s.UseCases.Any(uc => uc.Id == request.UseCaseId), cancellationToken);
             if (service is null)
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Use case '{request.UseCaseId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Use case '{request.UseCaseId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.UseCase,
+                        EntityId = request.UseCaseId
+                    });
             }
 
             var useCase = service.UseCases.First(uc => uc.Id == request.UseCaseId);
             if (request.EndpointId is { } endpointId && !context.Services.Any(s => s.Endpoints != null
                 && s.Endpoints.EndpointList.Any(e => e.Id == endpointId)))
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Endpoint '{endpointId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Endpoint '{endpointId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Endpoint,
+                        EntityId = endpointId
+                    });
             }
 
             if (request.ServiceId is { } relatedServiceId && !context.Services.Any(s => s.Id == relatedServiceId))
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Service '{relatedServiceId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Service '{relatedServiceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = relatedServiceId
+                    });
             }
 
             var step = useCase.Steps.FirstOrDefault(s => s.Name.Equals(request.StepName, StringComparison.OrdinalIgnoreCase));
@@ -258,7 +298,14 @@ public static class RemoveEntity
                 GraphEntityType.Service => await RemoveService(command.EntityId, cancellationToken),
                 GraphEntityType.Endpoint => await RemoveEndpoint(command.EntityId, cancellationToken),
                 GraphEntityType.UseCase => await RemoveUseCase(command.EntityId, cancellationToken),
-                _ => McpResult<MutationResultData>.Failure("validation_error", "Unsupported entity type.")
+                _ => McpResult<MutationResultData>.Failure(
+                    "validation_error",
+                    "Unsupported entity type.",
+                    new ValidationErrorDetails
+                    {
+                        Field = nameof(command.EntityType),
+                        Reason = "Value must be Service, Endpoint, or UseCase."
+                    })
             };
         }
 
@@ -268,7 +315,14 @@ public static class RemoveEntity
             var service = services.FirstOrDefault(s => s.Id == serviceId);
             if (service is null)
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Service '{serviceId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Service '{serviceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = serviceId
+                    });
             }
 
             var relatedUseCaseIds = services
@@ -284,7 +338,12 @@ public static class RemoveEntity
                 return McpResult<MutationResultData>.Failure(
                     "conflict",
                     "Service is used by existing use cases.",
-                    new { UseCaseIds = relatedUseCaseIds });
+                    new ConflictErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = serviceId,
+                        BlockingUseCaseIds = relatedUseCaseIds
+                    });
             }
 
             context.Remove(service);
@@ -305,7 +364,14 @@ public static class RemoveEntity
                 .FirstOrDefault(e => e.Id == endpointId);
             if (endpoint is null)
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Endpoint '{endpointId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Endpoint '{endpointId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Endpoint,
+                        EntityId = endpointId
+                    });
             }
 
             var relatedUseCaseIds = services
@@ -319,7 +385,12 @@ public static class RemoveEntity
                 return McpResult<MutationResultData>.Failure(
                     "conflict",
                     "Endpoint is used by existing use cases.",
-                    new { UseCaseIds = relatedUseCaseIds });
+                    new ConflictErrorDetails
+                    {
+                        EntityType = GraphEntityType.Endpoint,
+                        EntityId = endpointId,
+                        BlockingUseCaseIds = relatedUseCaseIds
+                    });
             }
 
             context.Remove(endpoint);
@@ -338,7 +409,14 @@ public static class RemoveEntity
             var useCase = services.SelectMany(s => s.UseCases).FirstOrDefault(uc => uc.Id == useCaseId);
             if (useCase is null)
             {
-                return McpResult<MutationResultData>.Failure("not_found", $"Use case '{useCaseId}' not found.");
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Use case '{useCaseId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.UseCase,
+                        EntityId = useCaseId
+                    });
             }
 
             context.Remove(useCase);
@@ -349,6 +427,122 @@ public static class RemoveEntity
                 EntityId = useCaseId,
                 Action = "removed"
             });
+        }
+    }
+}
+
+public static class BulkUpsertEndpoints
+{
+    public sealed record Command(BulkUpsertEndpointsRequest Request) : ICommand<McpResult<BulkMutationData>>;
+
+    public sealed class Handler(IMediator mediator) : ICommandHandler<Command, McpResult<BulkMutationData>>
+    {
+        public async ValueTask<McpResult<BulkMutationData>> Handle(Command command, CancellationToken cancellationToken)
+        {
+            var succeeded = new System.Collections.Generic.List<BulkMutationSuccessItem>();
+            var failed = new System.Collections.Generic.List<BulkMutationFailedItem>();
+
+            for (var index = 0; index < command.Request.Items.Length; index++)
+            {
+                var result = await mediator.Send(new UpsertEndpoint.Command(command.Request.Items[index]), cancellationToken);
+                if (result.Ok && result.Data is { } mutation)
+                {
+                    succeeded.Add(new BulkMutationSuccessItem { Index = index, Result = mutation });
+                }
+                else
+                {
+                    failed.Add(new BulkMutationFailedItem
+                    {
+                        Index = index,
+                        Code = result.Error?.Code ?? "internal_error",
+                        Message = result.Error?.Message ?? "Unknown error",
+                        Details = result.Error?.Details
+                    });
+                }
+            }
+
+            var batchData = new BulkMutationData
+            {
+                Succeeded = [.. succeeded],
+                Failed = [.. failed]
+            };
+
+            if (succeeded.Count > 0)
+            {
+                string[] warnings = failed.Count > 0
+                    ? [$"{failed.Count} items failed in batch."]
+                    : Array.Empty<string>();
+                return McpResult<BulkMutationData>.Success(
+                    batchData,
+                    warnings);
+            }
+
+            return McpResult<BulkMutationData>.Failure(
+                "batch_failed",
+                "No endpoints were upserted.",
+                new BatchErrorDetails
+                {
+                    FailedItems = failed.Count,
+                    TotalItems = command.Request.Items.Length
+                });
+        }
+    }
+}
+
+public static class BulkUpsertRelations
+{
+    public sealed record Command(BulkUpsertRelationsRequest Request) : ICommand<McpResult<BulkMutationData>>;
+
+    public sealed class Handler(IMediator mediator) : ICommandHandler<Command, McpResult<BulkMutationData>>
+    {
+        public async ValueTask<McpResult<BulkMutationData>> Handle(Command command, CancellationToken cancellationToken)
+        {
+            var succeeded = new System.Collections.Generic.List<BulkMutationSuccessItem>();
+            var failed = new System.Collections.Generic.List<BulkMutationFailedItem>();
+
+            for (var index = 0; index < command.Request.Items.Length; index++)
+            {
+                var result = await mediator.Send(new UpsertRelation.Command(command.Request.Items[index]), cancellationToken);
+                if (result.Ok && result.Data is { } mutation)
+                {
+                    succeeded.Add(new BulkMutationSuccessItem { Index = index, Result = mutation });
+                }
+                else
+                {
+                    failed.Add(new BulkMutationFailedItem
+                    {
+                        Index = index,
+                        Code = result.Error?.Code ?? "internal_error",
+                        Message = result.Error?.Message ?? "Unknown error",
+                        Details = result.Error?.Details
+                    });
+                }
+            }
+
+            var batchData = new BulkMutationData
+            {
+                Succeeded = [.. succeeded],
+                Failed = [.. failed]
+            };
+
+            if (succeeded.Count > 0)
+            {
+                string[] warnings = failed.Count > 0
+                    ? [$"{failed.Count} items failed in batch."]
+                    : Array.Empty<string>();
+                return McpResult<BulkMutationData>.Success(
+                    batchData,
+                    warnings);
+            }
+
+            return McpResult<BulkMutationData>.Failure(
+                "batch_failed",
+                "No relations were upserted.",
+                new BatchErrorDetails
+                {
+                    FailedItems = failed.Count,
+                    TotalItems = command.Request.Items.Length
+                });
         }
     }
 }

@@ -53,7 +53,12 @@ public static class GetService
             {
                 return McpResult<GetServiceData>.Failure(
                     "not_found",
-                    $"Service '{request.ServiceId}' not found.");
+                    $"Service '{request.ServiceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = request.ServiceId
+                    });
             }
 
             var details = ServicesDetails.FromEntities(service, request.IncludeEndpoints, request.IncludeUseCases);
@@ -85,7 +90,12 @@ public static class GetUseCase
             {
                 return McpResult<GetUseCaseData>.Failure(
                     "not_found",
-                    $"Use case '{request.UseCaseId}' not found.");
+                    $"Use case '{request.UseCaseId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.UseCase,
+                        EntityId = request.UseCaseId
+                    });
             }
 
             var details = UseCasesDetails.FromEntities(useCase);
@@ -94,6 +104,91 @@ public static class GetUseCase
                 UseCase = details,
                 Markdown = details.ToMarkdown()
             });
+        }
+    }
+}
+
+public static class ListEndpoints
+{
+    public sealed record Query(Guid ServiceId) : IRequest<McpResult<ListEndpointsData>>;
+
+    public sealed class Handler(GraphifyContext context) : IRequestHandler<Query, McpResult<ListEndpointsData>>
+    {
+        public async ValueTask<McpResult<ListEndpointsData>> Handle(Query request, CancellationToken cancellationToken)
+        {
+            await context.EnsureDataLoadedAsync(cancellationToken);
+            var service = await context.Services
+                .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
+
+            if (service is null)
+            {
+                return McpResult<ListEndpointsData>.Failure(
+                    "not_found",
+                    $"Service '{request.ServiceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = request.ServiceId
+                    });
+            }
+
+            var data = new ListEndpointsData
+            {
+                ServiceId = service.Id,
+                ServiceName = service.Name,
+                Endpoints = [.. (service.Endpoints?.EndpointList ?? []).Select(endpoint => new EndpointSummary
+                {
+                    EndpointId = endpoint.Id,
+                    Name = endpoint.Name,
+                    Description = endpoint.Description,
+                    Type = endpoint.Type,
+                    RelativeCodePath = endpoint.RelativeCodePath
+                })]
+            };
+
+            return McpResult<ListEndpointsData>.Success(data);
+        }
+    }
+}
+
+public static class ListUseCases
+{
+    public sealed record Query(Guid ServiceId) : IRequest<McpResult<ListUseCasesData>>;
+
+    public sealed class Handler(GraphifyContext context) : IRequestHandler<Query, McpResult<ListUseCasesData>>
+    {
+        public async ValueTask<McpResult<ListUseCasesData>> Handle(Query request, CancellationToken cancellationToken)
+        {
+            await context.EnsureDataLoadedAsync(cancellationToken);
+            var service = await context.Services
+                .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
+
+            if (service is null)
+            {
+                return McpResult<ListUseCasesData>.Failure(
+                    "not_found",
+                    $"Service '{request.ServiceId}' not found.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Service,
+                        EntityId = request.ServiceId
+                    });
+            }
+
+            var data = new ListUseCasesData
+            {
+                ServiceId = service.Id,
+                ServiceName = service.Name,
+                UseCases = [.. (service.UseCases ?? []).Select(useCase => new UseCaseSummary
+                {
+                    UseCaseId = useCase.Id,
+                    Name = useCase.Name,
+                    Description = useCase.Description,
+                    InitiatingEndpointId = useCase.InitiatingEndpointId
+                })]
+            };
+
+            return McpResult<ListUseCasesData>.Success(data);
         }
     }
 }
