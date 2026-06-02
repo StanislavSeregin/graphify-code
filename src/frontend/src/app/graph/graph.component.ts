@@ -81,9 +81,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       .subscribe(data => {
         if (data) {
           this.viewModel = buildGraphViewModel(data);
-          this.selectedServiceId = this.viewModel.services[0]?.id ?? null;
+          this.selectedServiceId = null;
+          this.selectedEndpointId = null;
+          this.selectedUseCaseId = null;
           this.detailMode = 'service';
-          this.renderer?.render(this.viewModel, this.selectedServiceId);
+          this.renderer?.render(this.viewModel, null);
         }
       });
   }
