@@ -1,14 +1,14 @@
 import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
-import { Endpoint, FullGraph, ServiceData, UseCase, UseCaseStep, GraphService } from './graph.service';
+import { Endpoint, FullGraph, UseCase, GraphService } from './graph.service';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { Observable, Subject, takeUntil } from 'rxjs';
 import { endpointTypeLabel, formatLastAnalyzed } from './graph-layout';
 import { GraphRenderer } from './graph-renderer';
 import {
-  EndpointReference,
   GraphServiceNode,
   GraphViewModel,
   UseCaseReference,
@@ -16,8 +16,8 @@ import {
   findRelatedServicesForEndpoint,
   findUseCasesForEndpoint
 } from './graph-view-model';
-
-type DetailMode = 'service' | 'endpoint' | 'useCase';
+import { UseCaseFlowModel, buildUseCaseFlowModel } from './use-case-flow-model';
+import { FlowSelection, UseCaseFlowRenderer } from './use-case-flow-renderer';
 
 @Component({
   selector: 'app-graph',
@@ -26,26 +26,33 @@ type DetailMode = 'service' | 'endpoint' | 'useCase';
     AsyncPipe,
     MatProgressBarModule,
     MatButtonModule,
-    MatIconModule
+    MatIconModule,
+    MatExpansionModule
   ],
   templateUrl: './graph.component.html',
   styleUrl: './graph.component.css'
 })
 export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('graphSvg', { static: false }) svgElement!: ElementRef<SVGSVGElement>;
+  @ViewChild('flowSvg', { static: false }) flowSvgElement!: ElementRef<SVGSVGElement>;
 
   private destroy$ = new Subject<void>();
   private renderer: GraphRenderer | null = null;
+  private flowRenderer: UseCaseFlowRenderer | null = null;
 
   isBusy$!: Observable<boolean>;
   error$!: Observable<string | null>;
   graphData$!: Observable<FullGraph | null>;
 
   viewModel: GraphViewModel | null = null;
-  detailMode: DetailMode = 'service';
   selectedServiceId: string | null = null;
-  selectedEndpointId: string | null = null;
-  selectedUseCaseId: string | null = null;
+  expandedEndpointId: string | null = null;
+  expandedUseCaseId: string | null = null;
+  activeFlowModel: UseCaseFlowModel | null = null;
+  activeFlowStepIndex: number | null = null;
+  activeFlowServiceId: string | null = null;
+  activeFlowEndpointKey: string | null = null;
+  activeFlowSelection: FlowSelection = null;
 
   constructor(
     private graphService: GraphService
@@ -56,11 +63,19 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   @HostListener('window:resize')
-  onViewportResize(): void { this.renderer?.resize(); }
+  onViewportResize(): void {
+    this.renderer?.resize();
+    this.flowRenderer?.resize();
+  }
 
   @HostListener('window:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
+      if (this.flowOverlayOpen) {
+        this.closeFlowOverlay();
+        event.preventDefault();
+        return;
+      }
       this.resetView();
     }
   }
@@ -75,6 +90,11 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
       onCanvasClick: () => this.clearSelection(),
       onZoom: transform => this.graphService.updateZoom(transform)
     });
+    this.flowRenderer = new UseCaseFlowRenderer(this.flowSvgElement.nativeElement, {
+      onServiceSelect: serviceId => this.activateFlowService(serviceId),
+      onEndpointSelect: (serviceId, endpointKey) => this.activateFlowEndpoint(serviceId, endpointKey),
+      onStepSelect: stepIndex => this.activateFlowStep(stepIndex)
+    });
 
     this.graphService.graphData$
       .pipe(takeUntil(this.destroy$))
@@ -82,9 +102,12 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
         if (data) {
           this.viewModel = buildGraphViewModel(data);
           this.selectedServiceId = null;
-          this.selectedEndpointId = null;
-          this.selectedUseCaseId = null;
-          this.detailMode = 'service';
+          this.expandedEndpointId = null;
+          this.expandedUseCaseId = null;
+          this.activeFlowServiceId = null;
+          this.activeFlowEndpointKey = null;
+          this.activeFlowSelection = null;
+          this.closeFlowOverlay();
           this.renderer?.render(this.viewModel, null);
         }
       });
@@ -103,58 +126,127 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
     this.renderer?.destroy();
+    this.flowRenderer?.destroy();
   }
 
   selectService(serviceId: string, focus = false): void {
     if (!this.viewModel?.servicesById.has(serviceId)) return;
     this.selectedServiceId = serviceId;
-    this.selectedEndpointId = null;
-    this.selectedUseCaseId = null;
-    this.detailMode = 'service';
+    this.expandedEndpointId = null;
+    this.expandedUseCaseId = null;
+    this.activeFlowServiceId = null;
+    this.activeFlowEndpointKey = null;
+    this.activeFlowSelection = null;
+    this.closeFlowOverlay();
     this.renderer?.updateSelection(serviceId);
     if (focus) {
       this.renderer?.focusService(serviceId);
     }
   }
 
-  selectEndpoint(endpointId: string): void {
-    const endpoint = this.viewModel?.endpointsById.get(endpointId);
-    if (!endpoint) return;
-    this.selectedEndpointId = endpointId;
-    this.selectedUseCaseId = null;
-    this.selectedServiceId = endpoint.service.service.id;
-    this.detailMode = 'endpoint';
-    this.renderer?.updateSelection(this.selectedServiceId);
-    this.renderer?.focusService(this.selectedServiceId);
-  }
-
-  selectUseCase(useCaseId: string): void {
+  expandUseCase(useCaseId: string): void {
     const useCase = this.viewModel?.useCasesById.get(useCaseId);
     if (!useCase) return;
-    this.selectedUseCaseId = useCaseId;
-    this.selectedEndpointId = null;
-    this.selectedServiceId = useCase.service.service.id;
-    this.detailMode = 'useCase';
-    this.renderer?.updateSelection(this.selectedServiceId);
-    this.renderer?.focusService(this.selectedServiceId);
+
+    if (this.selectedServiceId !== useCase.service.service.id) {
+      this.selectService(useCase.service.service.id, true);
+    }
+    this.expandedUseCaseId = useCaseId;
+    this.openFlowOverlay(useCase.useCase, 0);
   }
 
-  selectStep(step: UseCaseStep): void {
-    if (step.endpointId && this.viewModel?.endpointsById.has(step.endpointId)) {
-      this.selectEndpoint(step.endpointId);
+  onUseCaseOpened(useCase: UseCase): void {
+    this.expandedUseCaseId = useCase.id;
+    if (this.activeFlowModel?.useCaseId === useCase.id) {
+      this.flowRenderer?.updateActiveState(this.activeFlowSelection);
+      return;
+    }
+    this.openFlowOverlay(useCase, 0);
+  }
+
+  openFlowOverlay(useCase: UseCase, stepIndex: number): void {
+    if (!this.viewModel || !this.selectedService) return;
+
+    const existingModel = this.activeFlowModel?.useCaseId === useCase.id
+      ? this.activeFlowModel
+      : null;
+    if (existingModel) {
+      this.activateFlowStep(stepIndex);
       return;
     }
 
-    if (step.serviceId && this.viewModel?.servicesById.has(step.serviceId)) {
-      this.selectService(step.serviceId, true);
+    this.activeFlowModel = buildUseCaseFlowModel(useCase, this.selectedService.serviceData, this.viewModel);
+    const step = this.findFlowStep(stepIndex);
+    this.activeFlowStepIndex = stepIndex;
+    this.activeFlowServiceId = null;
+    this.activeFlowEndpointKey = null;
+    this.activeFlowSelection = { type: 'step', stepIndex };
+    this.flowRenderer?.render(this.activeFlowModel, this.activeFlowSelection);
+    this.renderer?.highlightServices(this.activeFlowModel.serviceIds);
+  }
+
+  activateFlowStep(stepIndex: number): void {
+    const step = this.findFlowStep(stepIndex);
+    if (!this.activeFlowModel || !step) return;
+
+    this.selectedServiceId = this.activeFlowModel.owningServiceId;
+    this.expandedEndpointId = null;
+    this.expandedUseCaseId = this.activeFlowModel.useCaseId;
+    this.activeFlowStepIndex = stepIndex;
+    this.activeFlowServiceId = null;
+    this.activeFlowEndpointKey = null;
+    this.activeFlowSelection = { type: 'step', stepIndex };
+    this.flowRenderer?.updateActiveState(this.activeFlowSelection);
+    this.renderer?.highlightServices(this.activeFlowModel.serviceIds);
+
+    window.setTimeout(() => {
+      document.getElementById(this.stepElementId(this.activeFlowModel?.useCaseId ?? '', stepIndex))
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
+
+  activateFlowEndpoint(serviceId: string, endpointKey: string): void {
+    if (!this.viewModel?.servicesById.has(serviceId)) return;
+
+    this.selectedServiceId = serviceId;
+    this.expandedUseCaseId = null;
+    this.expandedEndpointId = this.viewModel.endpointsById.has(endpointKey) ? endpointKey : null;
+    this.activeFlowServiceId = serviceId;
+    this.activeFlowEndpointKey = endpointKey;
+    this.activeFlowStepIndex = null;
+    this.activeFlowSelection = { type: 'endpoint', serviceId, endpointKey };
+    this.flowRenderer?.updateActiveState(this.activeFlowSelection);
+    if (this.activeFlowModel) {
+      this.renderer?.highlightServices(this.activeFlowModel.serviceIds);
+    }
+  }
+
+  activateFlowService(serviceId: string): void {
+    if (!this.viewModel?.servicesById.has(serviceId)) return;
+
+    this.selectedServiceId = serviceId;
+    this.expandedEndpointId = null;
+    this.expandedUseCaseId = this.activeFlowModel?.owningServiceId === serviceId
+      ? this.activeFlowModel.useCaseId
+      : null;
+    this.activeFlowServiceId = serviceId;
+    this.activeFlowEndpointKey = null;
+    this.activeFlowStepIndex = null;
+    this.activeFlowSelection = { type: 'service', serviceId };
+    this.flowRenderer?.updateActiveState(this.activeFlowSelection);
+    if (this.activeFlowModel) {
+      this.renderer?.highlightServices(this.activeFlowModel.serviceIds);
     }
   }
 
   clearSelection(): void {
-    this.selectedEndpointId = null;
-    this.selectedUseCaseId = null;
     this.selectedServiceId = null;
-    this.detailMode = 'service';
+    this.expandedEndpointId = null;
+    this.expandedUseCaseId = null;
+    this.activeFlowServiceId = null;
+    this.activeFlowEndpointKey = null;
+    this.activeFlowSelection = null;
+    this.closeFlowOverlay();
     this.renderer?.updateSelection(null);
   }
 
@@ -162,19 +254,27 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.clearSelection();
   }
 
+  closeFlowOverlay(): void {
+    this.activeFlowModel = null;
+    this.activeFlowStepIndex = null;
+    this.activeFlowServiceId = null;
+    this.activeFlowEndpointKey = null;
+    this.activeFlowSelection = null;
+    this.flowRenderer?.clear();
+    if (this.selectedServiceId) {
+      this.renderer?.updateSelection(this.selectedServiceId);
+    } else {
+      this.renderer?.updateSelection(null);
+    }
+  }
+
   get selectedService(): GraphServiceNode | null {
     if (!this.selectedServiceId || !this.viewModel) return null;
     return this.viewModel.servicesById.get(this.selectedServiceId) ?? null;
   }
 
-  get selectedEndpoint(): EndpointReference | null {
-    if (!this.selectedEndpointId || !this.viewModel) return null;
-    return this.viewModel.endpointsById.get(this.selectedEndpointId) ?? null;
-  }
-
-  get selectedUseCase(): UseCaseReference | null {
-    if (!this.selectedUseCaseId || !this.viewModel) return null;
-    return this.viewModel.useCasesById.get(this.selectedUseCaseId) ?? null;
+  get flowOverlayOpen(): boolean {
+    return Boolean(this.activeFlowModel);
   }
 
   get panelOpen(): boolean {
@@ -207,6 +307,17 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   relatedServices(endpointId: string): GraphServiceNode[] {
     return this.viewModel ? findRelatedServicesForEndpoint(this.viewModel, endpointId) : [];
+  }
+
+  stepElementId(useCaseId: string, index: number): string {
+    return `usecase-step-${useCaseId}-${index}`;
+  }
+
+  private findFlowStep(stepIndex: number) {
+    return this.activeFlowModel?.services
+      .flatMap(service => service.endpoints)
+      .flatMap(endpoint => endpoint.steps)
+      .find(step => step.index === stepIndex) ?? null;
   }
 
   trackService(_: number, service: GraphServiceNode): string { return service.id; }

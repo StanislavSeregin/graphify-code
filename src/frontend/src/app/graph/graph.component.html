@@ -28,12 +28,12 @@
   }
 
   <main class="graph-workspace" [class.panel-open]="panelOpen">
-    <section class="graph-canvas-card">
+    <section class="graph-canvas-card" [class.flow-active]="flowOverlayOpen">
       <div class="graph-help">
         <span><mat-icon>mouse</mat-icon> Drag to pan</span>
         <span><mat-icon>zoom_in</mat-icon> Scroll to zoom</span>
         <span><mat-icon>ads_click</mat-icon> Click a service for details</span>
-        <span><mat-icon>keyboard</mat-icon> Esc resets</span>
+        <span><mat-icon>keyboard</mat-icon> {{ flowOverlayOpen ? 'Esc closes step view' : 'Esc resets' }}</span>
       </div>
 
       @if (error$ | async; as errorMessage) {
@@ -53,6 +53,9 @@
       }
 
       <svg #graphSvg class="graph-svg"></svg>
+      <div class="flow-overlay" [class.open]="flowOverlayOpen" aria-label="Use case step flow">
+        <svg #flowSvg class="flow-svg"></svg>
+      </div>
     </section>
 
     <aside class="details-panel" [class.open]="panelOpen" aria-label="Graph details">
@@ -68,173 +71,164 @@
           </button>
         </div>
 
-        <div class="details-tabs" role="tablist">
-          <button type="button" [class.active]="detailMode === 'service'" (click)="selectService(service.id)">
-            Overview
-          </button>
-          <button
-            type="button"
-            [class.active]="detailMode === 'endpoint'"
-            [disabled]="service.endpointCount === 0"
-            (click)="service.serviceData.endpoint[0] && selectEndpoint(service.serviceData.endpoint[0].id)">
-            Endpoints
-          </button>
-          <button
-            type="button"
-            [class.active]="detailMode === 'useCase'"
-            [disabled]="service.useCaseCount === 0"
-            (click)="service.serviceData.useCases[0] && selectUseCase(service.serviceData.useCases[0].id)">
-            Use cases
-          </button>
-        </div>
+        <section class="details-section">
+          <h3>Summary</h3>
+          <p class="description">{{ service.serviceData.service.description || 'No description provided.' }}</p>
 
-        @if (detailMode === 'service') {
-          <section class="details-section">
-            <h3>Summary</h3>
-            <p class="description">{{ service.serviceData.service.description || 'No description provided.' }}</p>
-
-            <dl class="metadata-grid">
-              <div>
-                <dt>Last analyzed</dt>
-                <dd>{{ formatLastAnalyzed(service.serviceData.service.lastAnalyzedAt) }}</dd>
-              </div>
-              <div>
-                <dt>Code path</dt>
-                <dd>{{ service.serviceData.service.relativeCodePath || 'External service' }}</dd>
-              </div>
-              <div>
-                <dt>Endpoints</dt>
-                <dd>{{ service.endpointCount }}</dd>
-              </div>
-              <div>
-                <dt>Use cases</dt>
-                <dd>{{ service.useCaseCount }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="details-section">
-            <h3>Endpoints</h3>
-            @if (service.serviceData.endpoint.length > 0) {
-              <div class="entity-list">
-                @for (endpoint of service.serviceData.endpoint; track endpoint.id) {
-                  <button type="button" class="entity-row" (click)="selectEndpoint(endpoint.id)">
-                    <mat-icon>{{ endpoint.type === 'job' ? 'schedule' : endpoint.type === 'queue' ? 'mail' : 'http' }}</mat-icon>
-                    <span>{{ endpoint.name }}</span>
-                    <small>{{ endpointTypeLabel(endpoint.type) }}</small>
-                  </button>
-                }
-              </div>
-            } @else {
-              <p class="empty-panel-message">No endpoints documented.</p>
-            }
-          </section>
-
-          <section class="details-section">
-            <h3>Use cases</h3>
-            @if (service.serviceData.useCases.length > 0) {
-              <div class="entity-list">
-                @for (useCase of service.serviceData.useCases; track useCase.id) {
-                  <button type="button" class="entity-row" (click)="selectUseCase(useCase.id)">
-                    <mat-icon>account_tree</mat-icon>
-                    <span>{{ useCase.name }}</span>
-                    <small>{{ useCase.steps.length }} steps</small>
-                  </button>
-                }
-              </div>
-            } @else {
-              <p class="empty-panel-message">No use cases documented.</p>
-            }
-          </section>
-        }
-
-        @if (detailMode === 'endpoint' && selectedEndpoint; as endpointRef) {
-          <section class="details-section">
-            <span class="eyebrow">Endpoint</span>
-            <h3>{{ endpointRef.endpoint.name }}</h3>
-            <p class="description">{{ endpointRef.endpoint.description || 'No description provided.' }}</p>
-            <dl class="metadata-grid">
-              <div>
-                <dt>Type</dt>
-                <dd>{{ endpointTypeLabel(endpointRef.endpoint.type) }}</dd>
-              </div>
-              <div>
-                <dt>Last analyzed</dt>
-                <dd>{{ formatLastAnalyzed(endpointRef.endpoint.lastAnalyzedAt) }}</dd>
-              </div>
-              <div class="wide">
-                <dt>Code path</dt>
-                <dd>{{ endpointRef.endpoint.relativeCodePath || 'Not linked' }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="details-section">
-            <h3>Related use cases</h3>
-            @if (endpointUseCases(endpointRef.endpoint.id).length > 0) {
-              <div class="entity-list">
-                @for (reference of endpointUseCases(endpointRef.endpoint.id); track reference.useCase.id) {
-                  <button type="button" class="entity-row" (click)="selectUseCase(reference.useCase.id)">
-                    <mat-icon>playlist_play</mat-icon>
-                    <span>{{ reference.useCase.name }}</span>
-                    <small>{{ reference.service.service.name }}</small>
-                  </button>
-                }
-              </div>
-            } @else {
-              <p class="empty-panel-message">No use cases reference this endpoint.</p>
-            }
-          </section>
-
-          <section class="details-section">
-            <h3>Calling services</h3>
-            @if (relatedServices(endpointRef.endpoint.id).length > 0) {
-              <div class="entity-list">
-                @for (related of relatedServices(endpointRef.endpoint.id); track related.id) {
-                  <button type="button" class="entity-row" (click)="selectService(related.id, true)">
-                    <mat-icon>{{ related.isExternal ? 'link' : 'apps' }}</mat-icon>
-                    <span>{{ related.serviceData.service.name }}</span>
-                  </button>
-                }
-              </div>
-            } @else {
-              <p class="empty-panel-message">No incoming calls documented.</p>
-            }
-          </section>
-        }
-
-        @if (detailMode === 'useCase' && selectedUseCase; as useCaseRef) {
-          <section class="details-section">
-            <span class="eyebrow">Use case</span>
-            <h3>{{ useCaseRef.useCase.name }}</h3>
-            <p class="description">{{ useCaseRef.useCase.description || 'No description provided.' }}</p>
-            <dl class="metadata-grid">
-              <div>
-                <dt>Last analyzed</dt>
-                <dd>{{ formatLastAnalyzed(useCaseRef.useCase.lastAnalyzedAt) }}</dd>
-              </div>
-              <div>
-                <dt>Steps</dt>
-                <dd>{{ useCaseRef.useCase.steps.length }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="details-section">
-            <h3>Steps</h3>
-            <div class="timeline">
-              @for (step of useCaseRef.useCase.steps; track $index) {
-                <button type="button" class="timeline-step" (click)="selectStep(step)">
-                  <span class="step-index">{{ $index + 1 }}</span>
-                  <span>
-                    <strong>{{ step.name }}</strong>
-                    <small>{{ step.description || 'No description provided.' }}</small>
-                  </span>
-                </button>
-              }
+          <dl class="metadata-grid">
+            <div>
+              <dt>Last analyzed</dt>
+              <dd>{{ formatLastAnalyzed(service.serviceData.service.lastAnalyzedAt) }}</dd>
             </div>
-          </section>
-        }
+            <div>
+              <dt>Code path</dt>
+              <dd>{{ service.serviceData.service.relativeCodePath || 'External service' }}</dd>
+            </div>
+            <div>
+              <dt>Endpoints</dt>
+              <dd>{{ service.endpointCount }}</dd>
+            </div>
+            <div>
+              <dt>Use cases</dt>
+              <dd>{{ service.useCaseCount }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="details-section">
+          <h3>Endpoints</h3>
+          @if (service.serviceData.endpoint.length > 0) {
+            <mat-accordion class="entity-accordion">
+              @for (endpoint of service.serviceData.endpoint; track endpoint.id) {
+                <mat-expansion-panel
+                  [expanded]="expandedEndpointId === endpoint.id"
+                  [class.active]="expandedEndpointId === endpoint.id"
+                  (opened)="expandedEndpointId = endpoint.id"
+                  (closed)="expandedEndpointId === endpoint.id && (expandedEndpointId = null)">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      <mat-icon>{{ endpoint.type === 'job' ? 'schedule' : endpoint.type === 'queue' ? 'mail' : 'http' }}</mat-icon>
+                      <span>{{ endpoint.name }}</span>
+                    </mat-panel-title>
+                    <mat-panel-description>{{ endpointTypeLabel(endpoint.type) }}</mat-panel-description>
+                  </mat-expansion-panel-header>
+
+                  <div class="expanded-entity">
+                    <p class="description">{{ endpoint.description || 'No description provided.' }}</p>
+                    <dl class="metadata-grid">
+                      <div>
+                        <dt>Type</dt>
+                        <dd>{{ endpointTypeLabel(endpoint.type) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Last analyzed</dt>
+                        <dd>{{ formatLastAnalyzed(endpoint.lastAnalyzedAt) }}</dd>
+                      </div>
+                      <div class="wide">
+                        <dt>Code path</dt>
+                        <dd>{{ endpoint.relativeCodePath || 'Not linked' }}</dd>
+                      </div>
+                    </dl>
+
+                    <div class="inline-section">
+                      <h4>Related use cases</h4>
+                      @if (endpointUseCases(endpoint.id).length > 0) {
+                        <div class="entity-list">
+                          @for (reference of endpointUseCases(endpoint.id); track reference.useCase.id) {
+                            <button type="button" class="entity-row" (click)="expandUseCase(reference.useCase.id)">
+                              <mat-icon>playlist_play</mat-icon>
+                              <span>{{ reference.useCase.name }}</span>
+                              <small>{{ reference.service.service.name }}</small>
+                            </button>
+                          }
+                        </div>
+                      } @else {
+                        <p class="empty-panel-message">No use cases reference this endpoint.</p>
+                      }
+                    </div>
+
+                    <div class="inline-section">
+                      <h4>Calling services</h4>
+                      @if (relatedServices(endpoint.id).length > 0) {
+                        <div class="entity-list">
+                          @for (related of relatedServices(endpoint.id); track related.id) {
+                            <button type="button" class="entity-row" (click)="selectService(related.id, true)">
+                              <mat-icon>{{ related.isExternal ? 'link' : 'apps' }}</mat-icon>
+                              <span>{{ related.serviceData.service.name }}</span>
+                            </button>
+                          }
+                        </div>
+                      } @else {
+                        <p class="empty-panel-message">No incoming calls documented.</p>
+                      }
+                    </div>
+                  </div>
+                </mat-expansion-panel>
+              }
+            </mat-accordion>
+          } @else {
+            <p class="empty-panel-message">No endpoints documented.</p>
+          }
+        </section>
+
+        <section class="details-section">
+          <h3>Use cases</h3>
+          @if (service.serviceData.useCases.length > 0) {
+            <mat-accordion class="entity-accordion">
+              @for (useCase of service.serviceData.useCases; track useCase.id) {
+                <mat-expansion-panel
+                  [expanded]="expandedUseCaseId === useCase.id"
+                  [class.active]="expandedUseCaseId === useCase.id"
+                  (opened)="onUseCaseOpened(useCase)"
+                  (closed)="expandedUseCaseId === useCase.id && (expandedUseCaseId = null)">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      <mat-icon>account_tree</mat-icon>
+                      <span>{{ useCase.name }}</span>
+                    </mat-panel-title>
+                    <mat-panel-description>{{ useCase.steps.length }} steps</mat-panel-description>
+                  </mat-expansion-panel-header>
+
+                  <div class="expanded-entity">
+                    <p class="description">{{ useCase.description || 'No description provided.' }}</p>
+                    <dl class="metadata-grid">
+                      <div>
+                        <dt>Last analyzed</dt>
+                        <dd>{{ formatLastAnalyzed(useCase.lastAnalyzedAt) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Steps</dt>
+                        <dd>{{ useCase.steps.length }}</dd>
+                      </div>
+                    </dl>
+
+                    <div class="inline-section">
+                      <h4>Steps</h4>
+                      <div class="timeline">
+                        @for (step of useCase.steps; track $index) {
+                          <button
+                            [id]="stepElementId(useCase.id, $index)"
+                            type="button"
+                            class="timeline-step"
+                            [class.active]="activeFlowModel?.useCaseId === useCase.id && activeFlowStepIndex === $index"
+                            (click)="openFlowOverlay(useCase, $index)">
+                            <span class="step-index">{{ $index + 1 }}</span>
+                            <span>
+                              <strong>{{ step.name }}</strong>
+                              <small>{{ step.description || 'No description provided.' }}</small>
+                            </span>
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </mat-expansion-panel>
+              }
+            </mat-accordion>
+          } @else {
+            <p class="empty-panel-message">No use cases documented.</p>
+          }
+        </section>
       } @else {
         <div class="details-empty">
           <mat-icon>near_me</mat-icon>

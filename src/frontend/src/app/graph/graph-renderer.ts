@@ -3,14 +3,35 @@ import {
   GRAPH_FIT_PADDING,
   GRAPH_MAX_INITIAL_SCALE,
   GRAPH_MIN_READABLE_SCALE,
-  SERVICE_NODE_HEIGHT,
   SERVICE_NODE_RADIUS,
-  SERVICE_NODE_WIDTH,
   formatLastAnalyzed
 } from './graph-layout';
 import { GraphDependencyEdge, GraphServiceNode, GraphViewModel } from './graph-view-model';
 
-interface RenderNode extends d3.SimulationNodeDatum, GraphServiceNode {}
+const SERVICE_NODE_MIN_WIDTH = 360;
+const SERVICE_NODE_MAX_WIDTH = 520;
+const SERVICE_NODE_HORIZONTAL_PADDING = 24;
+const SERVICE_NODE_TOP_PADDING = 24;
+const SERVICE_NODE_BOTTOM_PADDING = 22;
+const SERVICE_TITLE_LINE_HEIGHT = 19;
+const SERVICE_DESCRIPTION_LINE_HEIGHT = 16;
+const SERVICE_META_HEIGHT = 16;
+const SERVICE_BADGE_HEIGHT = 22;
+const SERVICE_BADGE_GAP = 8;
+const AVERAGE_CHAR_WIDTH = 6.7;
+
+interface TextBlock {
+  lines: string[];
+  width: number;
+  height: number;
+}
+
+interface RenderNode extends d3.SimulationNodeDatum, GraphServiceNode {
+  layoutWidth: number;
+  layoutHeight: number;
+  titleText: TextBlock;
+  descriptionText: TextBlock;
+}
 
 interface RenderEdge extends d3.SimulationLinkDatum<RenderNode> {
   id: string;
@@ -39,6 +60,7 @@ export class GraphRenderer {
   private edges: RenderEdge[] = [];
   private simulation: d3.Simulation<RenderNode, RenderEdge> | null = null;
   private selectedServiceId: string | null = null;
+  private highlightedServiceIds: Set<string> | null = null;
 
   constructor(svgElement: SVGSVGElement, callbacks: GraphRendererCallbacks) {
     this.callbacks = callbacks;
@@ -73,11 +95,15 @@ export class GraphRenderer {
     this.selectedServiceId = selectedServiceId;
     this.stopSimulation();
 
-    this.nodes = vm.services.map((service, index) => ({
-      ...service,
-      x: serviceCountPosition(index, vm.services.length).x,
-      y: serviceCountPosition(index, vm.services.length).y
-    }));
+    this.nodes = vm.services.map((service, index) => {
+      const layout = buildServiceNodeLayout(service);
+      return {
+        ...service,
+        ...layout,
+        x: serviceCountPosition(index, vm.services.length).x,
+        y: serviceCountPosition(index, vm.services.length).y
+      };
+    });
 
     const nodeById = new Map(this.nodes.map(node => [node.id, node]));
     this.edges = vm.edges
@@ -96,10 +122,21 @@ export class GraphRenderer {
 
   updateSelection(serviceId: string | null): void {
     this.selectedServiceId = serviceId;
+    this.highlightedServiceIds = null;
     this.nodesLayer
       .selectAll<SVGGElement, RenderNode>('g.service-node')
       .classed('selected', node => node.id === serviceId)
+      .classed('flow-highlight', false)
       .classed('dimmed', node => Boolean(serviceId) && node.id !== serviceId);
+  }
+
+  highlightServices(serviceIds: Set<string>): void {
+    this.highlightedServiceIds = serviceIds;
+    this.nodesLayer
+      .selectAll<SVGGElement, RenderNode>('g.service-node')
+      .classed('selected', node => node.id === this.selectedServiceId)
+      .classed('flow-highlight', node => serviceIds.has(node.id))
+      .classed('dimmed', node => !serviceIds.has(node.id));
   }
 
   focusService(serviceId: string): void {
@@ -159,14 +196,6 @@ export class GraphRenderer {
       .attr('flood-color', '#0f172a')
       .attr('flood-opacity', 0.12);
 
-    defs.append('clipPath')
-      .attr('id', 'service-node-card-clip')
-      .append('rect')
-      .attr('x', -SERVICE_NODE_WIDTH / 2)
-      .attr('y', -SERVICE_NODE_HEIGHT / 2)
-      .attr('width', SERVICE_NODE_WIDTH)
-      .attr('height', SERVICE_NODE_HEIGHT)
-      .attr('rx', SERVICE_NODE_RADIUS);
   }
 
   private drawLinks(): void {
@@ -200,19 +229,12 @@ export class GraphRenderer {
 
         group.append('rect')
           .attr('class', 'service-node-card')
-          .attr('x', -SERVICE_NODE_WIDTH / 2)
-          .attr('y', -SERVICE_NODE_HEIGHT / 2)
-          .attr('width', SERVICE_NODE_WIDTH)
-          .attr('height', SERVICE_NODE_HEIGHT)
           .attr('rx', SERVICE_NODE_RADIUS);
 
         group.append('rect')
           .attr('class', 'service-node-accent')
-          .attr('x', -SERVICE_NODE_WIDTH / 2)
-          .attr('y', -SERVICE_NODE_HEIGHT / 2)
           .attr('width', 6)
-          .attr('height', SERVICE_NODE_HEIGHT)
-          .attr('clip-path', 'url(#service-node-card-clip)');
+          .attr('rx', 3);
 
         group.append('text').attr('class', 'service-node-title');
         group.append('text').attr('class', 'service-node-description');
@@ -225,29 +247,43 @@ export class GraphRenderer {
     nodeSelection
       .classed('external', node => node.isExternal)
       .classed('selected', node => node.id === this.selectedServiceId)
-      .classed('dimmed', node => Boolean(this.selectedServiceId) && node.id !== this.selectedServiceId)
+      .classed('flow-highlight', node => this.highlightedServiceIds?.has(node.id) ?? false)
+      .classed('dimmed', node => this.highlightedServiceIds
+        ? !this.highlightedServiceIds.has(node.id)
+        : Boolean(this.selectedServiceId) && node.id !== this.selectedServiceId)
       .each((node, index, groups) => this.populateNode(d3.select(groups[index]), node));
   }
 
   private populateNode(group: d3.Selection<SVGGElement, RenderNode, any, any>, node: RenderNode): void {
-    const left = -SERVICE_NODE_WIDTH / 2 + 22;
-    const contentWidth = SERVICE_NODE_WIDTH - 44;
+    const left = -node.layoutWidth / 2 + SERVICE_NODE_HORIZONTAL_PADDING;
+    const top = -node.layoutHeight / 2;
+
+    group.select<SVGRectElement>('rect.service-node-card')
+      .attr('x', -node.layoutWidth / 2)
+      .attr('y', top)
+      .attr('width', node.layoutWidth)
+      .attr('height', node.layoutHeight);
+
+    group.select<SVGRectElement>('rect.service-node-accent')
+      .attr('x', -node.layoutWidth / 2)
+      .attr('y', top)
+      .attr('height', node.layoutHeight);
 
     group.select<SVGTextElement>('text.service-node-title')
       .attr('x', left)
-      .attr('y', -SERVICE_NODE_HEIGHT / 2 + 34)
-      .call(selection => setWrappedText(selection, node.serviceData.service.name, contentWidth, 2, 18));
+      .attr('y', top + SERVICE_NODE_TOP_PADDING)
+      .call(selection => appendLines(selection, node.titleText.lines, SERVICE_TITLE_LINE_HEIGHT));
 
     group.select<SVGTextElement>('text.service-node-description')
       .attr('x', left)
-      .attr('y', -SERVICE_NODE_HEIGHT / 2 + 78)
-      .call(selection => setWrappedText(selection, node.serviceData.service.description || 'No description', contentWidth, 2, 15));
+      .attr('y', top + SERVICE_NODE_TOP_PADDING + node.titleText.height + 16)
+      .call(selection => appendLines(selection, node.descriptionText.lines, SERVICE_DESCRIPTION_LINE_HEIGHT));
 
     const analyzed = formatLastAnalyzed(node.serviceData.service.lastAnalyzedAt);
     const meta = analyzed ? `Last analyzed: ${analyzed}` : 'Last analyzed: unknown';
     group.select<SVGTextElement>('text.service-node-meta')
       .attr('x', left)
-      .attr('y', SERVICE_NODE_HEIGHT / 2 - 58)
+      .attr('y', top + SERVICE_NODE_TOP_PADDING + node.titleText.height + 16 + node.descriptionText.height + 22)
       .text(meta);
 
     const badges = [
@@ -257,7 +293,7 @@ export class GraphRenderer {
     ];
 
     const badgeGroup = group.select<SVGGElement>('g.service-node-badges')
-      .attr('transform', `translate(${left}, ${SERVICE_NODE_HEIGHT / 2 - 36})`);
+      .attr('transform', `translate(${left}, ${node.layoutHeight / 2 - SERVICE_NODE_BOTTOM_PADDING - SERVICE_BADGE_HEIGHT})`);
     const badgeSelection = badgeGroup.selectAll<SVGGElement, string>('g.badge')
       .data(badges)
       .join(enter => {
@@ -285,12 +321,12 @@ export class GraphRenderer {
     this.simulation = d3.forceSimulation<RenderNode, RenderEdge>(this.nodes)
       .force('link', d3.forceLink<RenderNode, RenderEdge>(this.edges)
         .id(node => node.id)
-        .distance(Math.max(420, avg * 0.34))
+        .distance(Math.max(460, avg * 0.36))
         .strength(0.42))
-      .force('charge', d3.forceManyBody().strength(-1100))
+      .force('charge', d3.forceManyBody().strength(-1300))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<RenderNode>()
-        .radius(Math.max(SERVICE_NODE_WIDTH, SERVICE_NODE_HEIGHT) / 2 + 44)
+        .radius(node => Math.max(node.layoutWidth, node.layoutHeight) / 2 + 48)
         .strength(1))
       .on('tick', () => this.updatePositions());
 
@@ -314,10 +350,10 @@ export class GraphRenderer {
     const { width, height } = this.viewport();
     if (!this.nodes.length || width === 0 || height === 0) return;
 
-    const minX = d3.min(this.nodes, node => (node.x ?? 0) - SERVICE_NODE_WIDTH / 2) ?? 0;
-    const maxX = d3.max(this.nodes, node => (node.x ?? 0) + SERVICE_NODE_WIDTH / 2) ?? width;
-    const minY = d3.min(this.nodes, node => (node.y ?? 0) - SERVICE_NODE_HEIGHT / 2) ?? 0;
-    const maxY = d3.max(this.nodes, node => (node.y ?? 0) + SERVICE_NODE_HEIGHT / 2) ?? height;
+    const minX = d3.min(this.nodes, node => (node.x ?? 0) - node.layoutWidth / 2) ?? 0;
+    const maxX = d3.max(this.nodes, node => (node.x ?? 0) + node.layoutWidth / 2) ?? width;
+    const minY = d3.min(this.nodes, node => (node.y ?? 0) - node.layoutHeight / 2) ?? 0;
+    const maxY = d3.max(this.nodes, node => (node.y ?? 0) + node.layoutHeight / 2) ?? height;
 
     const graphWidth = Math.max(1, maxX - minX);
     const graphHeight = Math.max(1, maxY - minY);
@@ -357,8 +393,8 @@ function serviceCountPosition(index: number, count: number): { x: number; y: num
   const row = Math.floor(index / columns);
   const col = index % columns;
   return {
-    x: col * (SERVICE_NODE_WIDTH + 140),
-    y: row * (SERVICE_NODE_HEIGHT + 120)
+    x: col * (SERVICE_NODE_MAX_WIDTH + 180),
+    y: row * 360
   };
 }
 
@@ -369,8 +405,8 @@ function serviceLinkPath(source: RenderNode, target: RenderNode): string {
   const ty = target.y ?? 0;
   const dx = tx - sx;
   const dy = ty - sy;
-  const sourceOffset = rectangleIntersectionOffset(dx, dy);
-  const targetOffset = rectangleIntersectionOffset(-dx, -dy);
+  const sourceOffset = rectangleIntersectionOffset(dx, dy, source.layoutWidth, source.layoutHeight);
+  const targetOffset = rectangleIntersectionOffset(-dx, -dy, target.layoutWidth, target.layoutHeight);
   const x1 = sx + sourceOffset.x;
   const y1 = sy + sourceOffset.y;
   const x2 = tx + targetOffset.x;
@@ -383,10 +419,10 @@ function serviceLinkPath(source: RenderNode, target: RenderNode): string {
   return `M ${x1},${y1} Q ${mx},${my} ${x2},${y2}`;
 }
 
-function rectangleIntersectionOffset(dx: number, dy: number): { x: number; y: number } {
+function rectangleIntersectionOffset(dx: number, dy: number, width: number, height: number): { x: number; y: number } {
   if (dx === 0 && dy === 0) return { x: 0, y: 0 };
-  const halfW = SERVICE_NODE_WIDTH / 2 + 8;
-  const halfH = SERVICE_NODE_HEIGHT / 2 + 8;
+  const halfW = width / 2 + 8;
+  const halfH = height / 2 + 8;
   const scale = Math.min(
     Math.abs(dx) > 0 ? halfW / Math.abs(dx) : Number.POSITIVE_INFINITY,
     Math.abs(dy) > 0 ? halfH / Math.abs(dy) : Number.POSITIVE_INFINITY
@@ -394,61 +430,108 @@ function rectangleIntersectionOffset(dx: number, dy: number): { x: number; y: nu
   return { x: dx * scale, y: dy * scale };
 }
 
-function setWrappedText(
+function buildServiceNodeLayout(service: GraphServiceNode): Pick<RenderNode, 'layoutWidth' | 'layoutHeight' | 'titleText' | 'descriptionText'> {
+  const titleText = buildTextBlock(service.serviceData.service.name, 44, SERVICE_TITLE_LINE_HEIGHT);
+  const descriptionText = buildTextBlock(
+    service.serviceData.service.description || 'No description',
+    58,
+    SERVICE_DESCRIPTION_LINE_HEIGHT
+  );
+  const contentWidth = Math.max(titleText.width, descriptionText.width);
+  const layoutWidth = clamp(
+    contentWidth + SERVICE_NODE_HORIZONTAL_PADDING * 2,
+    SERVICE_NODE_MIN_WIDTH,
+    SERVICE_NODE_MAX_WIDTH
+  );
+  const chars = charsForWidth(layoutWidth - SERVICE_NODE_HORIZONTAL_PADDING * 2);
+  const reflowedTitleText = buildTextBlock(service.serviceData.service.name, chars, SERVICE_TITLE_LINE_HEIGHT);
+  const reflowedDescriptionText = buildTextBlock(
+    service.serviceData.service.description || 'No description',
+    chars,
+    SERVICE_DESCRIPTION_LINE_HEIGHT
+  );
+  const layoutHeight =
+    SERVICE_NODE_TOP_PADDING +
+    reflowedTitleText.height +
+    16 +
+    reflowedDescriptionText.height +
+    22 +
+    SERVICE_META_HEIGHT +
+    18 +
+    SERVICE_BADGE_HEIGHT +
+    SERVICE_NODE_BOTTOM_PADDING;
+
+  return {
+    layoutWidth,
+    layoutHeight,
+    titleText: reflowedTitleText,
+    descriptionText: reflowedDescriptionText
+  };
+}
+
+function buildTextBlock(value: string, maxCharsPerLine: number, lineHeight: number): TextBlock {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const chunks = splitLongWord(word, maxCharsPerLine);
+    for (const chunk of chunks) {
+      const next = current ? `${current} ${chunk}` : chunk;
+      if (next.length <= maxCharsPerLine || !current) {
+        current = next;
+        continue;
+      }
+      lines.push(current);
+      current = chunk;
+    }
+  }
+  if (current) {
+    lines.push(current);
+  }
+  if (!lines.length) {
+    lines.push('');
+  }
+
+  return {
+    lines,
+    width: Math.ceil(Math.max(...lines.map(line => line.length)) * AVERAGE_CHAR_WIDTH),
+    height: lines.length * lineHeight
+  };
+}
+
+function splitLongWord(word: string, maxChars: number): string[] {
+  if (word.length <= maxChars) return [word];
+  const chunks: string[] = [];
+  for (let index = 0; index < word.length; index += maxChars) {
+    chunks.push(word.slice(index, index + maxChars));
+  }
+  return chunks;
+}
+
+function appendLines(
   selection: d3.Selection<SVGTextElement, RenderNode, any, any>,
-  text: string,
-  maxWidth: number,
-  maxLines: number,
+  lines: string[],
   lineHeight: number
 ): void {
   selection.each(function() {
     const textSelection = d3.select(this);
     textSelection.selectAll('tspan').remove();
-
-    const words = text.trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return;
-
     const x = Number(textSelection.attr('x'));
     const y = Number(textSelection.attr('y'));
-    let line: string[] = [];
-    let lineNumber = 0;
-    let tspan = textSelection.append('tspan').attr('x', x).attr('y', y).text('');
-
-    for (const word of words) {
-      line.push(word);
-      tspan.text(line.join(' '));
-
-      if ((tspan.node()?.getComputedTextLength() ?? 0) <= maxWidth) {
-        continue;
-      }
-
-      line.pop();
-      tspan.text(line.join(' '));
-      lineNumber += 1;
-
-      if (lineNumber >= maxLines) {
-        appendEllipsis(tspan, maxWidth);
-        return;
-      }
-
-      line = [word];
-      tspan = textSelection
-        .append('tspan')
+    lines.forEach((line, index) => {
+      textSelection.append('tspan')
         .attr('x', x)
-        .attr('y', y + lineNumber * lineHeight)
-        .text(word);
-    }
-
-    if (lineNumber + 1 > maxLines) {
-      appendEllipsis(tspan, maxWidth);
-    }
+        .attr('y', y + index * lineHeight)
+        .text(line);
+    });
   });
 }
 
-function appendEllipsis(tspan: d3.Selection<SVGTSpanElement, unknown, any, any>, maxWidth: number): void {
-  let value = tspan.text();
-  while (value.length > 0 && (tspan.node()?.getComputedTextLength() ?? 0) > maxWidth) {
-    value = value.slice(0, -1);
-    tspan.text(`${value}...`);
-  }
+function charsForWidth(width: number): number {
+  return Math.max(18, Math.floor(width / AVERAGE_CHAR_WIDTH));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

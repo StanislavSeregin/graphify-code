@@ -136,10 +136,17 @@ export function findUseCasesForEndpoint(vm: GraphViewModel, endpointId: string):
 export function findRelatedServicesForEndpoint(vm: GraphViewModel, endpointId: string): GraphServiceNode[] {
   const relatedServiceIds = new Set<string>();
 
-  vm.edges.forEach(edge => {
-    const targetServiceId = vm.endpointToServiceId.get(endpointId);
-    if (targetServiceId && edge.targetId === targetServiceId) {
-      relatedServiceIds.add(edge.sourceId);
+  vm.services.forEach(service => {
+    const { serviceData } = service;
+    if (serviceData.relations.targetEndpointIds.includes(endpointId)) {
+      relatedServiceIds.add(service.id);
+    }
+
+    for (const useCase of serviceData.useCases) {
+      if (useCase.steps.some(step => step.endpointId === endpointId)) {
+        relatedServiceIds.add(service.id);
+        break;
+      }
     }
   });
 
