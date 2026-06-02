@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace GraphifyCode.MCP;
@@ -20,7 +21,7 @@ public class Program
             .Configure<MarkdownStorageSettings>(options =>
             {
                 options.Path = GetDataPath();
-                Console.WriteLine($"Selected path is {options.Path}");
+                Console.WriteLine($"Using DATA_PATH '{options.Path}'");
             })
             .AddMediator()
             .AddGraphifyContext(builder.Configuration)
@@ -36,7 +37,6 @@ public class Program
     private static string GetDataPath()
     {
         return Environment.GetEnvironmentVariable(PATH_ENV_KEY)
-            ?? Environment.ProcessPath
-            ?? throw new InvalidOperationException($"Data path not specified, set {PATH_ENV_KEY}");
+            ?? Path.Combine(Directory.GetCurrentDirectory(), "graph-data");
     }
 }

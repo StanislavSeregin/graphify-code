@@ -59,6 +59,11 @@ internal static class EntityDriver
         FilePathResolver: (pathContext, entity) => Path.Combine(pathContext, entity.Id.ToString(), "service.md"),
         Writer: async (filePath, entity, ct) =>
         {
+            if (Path.GetDirectoryName(filePath) is { } directoryPath)
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
+
             var md = entity.ToMarkdown();
             await File.WriteAllTextAsync(filePath, md, ct);
         },
@@ -91,6 +96,11 @@ internal static class EntityDriver
         FilePathResolver: (pathContext, entity) => Path.Combine(pathContext, entity.Parent.Id.ToString(), "endpoints.md"),
         Writer: async (filePath, entity, ct) =>
         {
+            if (Path.GetDirectoryName(filePath) is { } directoryPath)
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
+
             var md = entity.ToMarkdown();
             await File.WriteAllTextAsync(filePath, md, ct);
         },
@@ -134,6 +144,11 @@ internal static class EntityDriver
         FilePathResolver: (pathContext, entity) => Path.Combine(pathContext, entity.Parent.Id.ToString(), "usecases", $"{entity.Id}.md"),
         Writer: async (filePath, entity, ct) =>
         {
+            if (Path.GetDirectoryName(filePath) is { } directoryPath)
+            {
+                Directory.CreateDirectory(directoryPath);
+            }
+
             var md = entity.ToMarkdown();
             await File.WriteAllTextAsync(filePath, md, ct);
         },

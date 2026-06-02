@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GraphifyCode.Data\GraphifyCode.Data.csproj" />
+    <ProjectReference Include="..\GraphifyCode.MCP\GraphifyCode.MCP.csproj" />
   </ItemGroup>
 
 </Project>

@@ -10,8 +10,8 @@ Instead of loading entire documentation, query specific pieces: services, endpoi
 
 ## Key Features
 
-- **Incremental queries** - GetServices, GetEndpoints, GetRelations without loading everything
-- **Schema-enforced updates** - CreateOrUpdateService/Endpoint, AddRelation with guaranteed structure
+- **Incremental queries** - `list_services`, `get_service`, `get_use_case`, `search_graph`
+- **Schema-enforced updates** - `upsert_service`, `upsert_endpoint`, `upsert_use_case`, `upsert_relation`, `remove_entity`
 - **Markdown storage** - Human-readable, version controllable, lives with your code
 - **Graph visualization** - Explore documented architecture visually
 - **Code navigation** - Direct links from documentation to source files
@@ -29,7 +29,8 @@ Instead of loading entire documentation, query specific pieces: services, endpoi
   /{service-guid}/
     service.md             # Service metadata
     endpoints.md           # Service endpoints
-    relations.md           # Service relations
+    /usecases/
+      {usecase-guid}.md    # Use cases and relation steps
 ```
 
 Markdown files with guaranteed schema, queryable through MCP tools.
@@ -61,17 +62,26 @@ Configure MCP client:
 }
 ```
 
-### Available Tools
+### Available MCP Tools
 
-**Query:**
-- `GetServices` - All services with metadata
-- `GetEndpoints` - Endpoints for a service
-- `GetRelations` - Dependencies for a service
+All tools return a unified response envelope:
+- `ok: boolean`
+- `data: object | null`
+- `error: { code, message, details, retriable } | null`
+- `warnings: string[]`
 
-**Modify:**
-- `CreateOrUpdateService` / `CreateOrUpdateEndpoint` - Add or update
-- `AddRelation` - Create dependency
-- `DeleteService` / `DeleteEndpoint` / `DeleteRelation` - Remove (cascading)
+**Read / discover:**
+- `list_services` - All services with compact metadata and markdown snapshot
+- `get_service` - One service by ID, with optional endpoints/use cases
+- `get_use_case` - One use case by ID with detailed steps
+- `search_graph` - Text search across service/endpoint/use case names, descriptions, and code paths
+
+**Write / mutate:**
+- `upsert_service` - Create or update service
+- `upsert_endpoint` - Create or update endpoint in service
+- `upsert_use_case` - Create or update use case in service
+- `upsert_relation` - Create or update use case step relation
+- `remove_entity` - Remove `Service` / `Endpoint` / `UseCase` by typed enum
 
 ### Usage Examples
 
@@ -84,7 +94,15 @@ What are the dependencies of the User Service?
 ```
 
 ```
-Add a new endpoint "GET /api/users" to the User Service
+Create a service called "User Service" for authentication responsibilities
+```
+
+```
+Find all entities related to "payments"
+```
+
+```
+Upsert endpoint "GET /api/users" in service {service-id}
 ```
 
 ## Architecture
