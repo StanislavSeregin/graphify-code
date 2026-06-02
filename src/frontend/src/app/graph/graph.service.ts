@@ -234,6 +234,10 @@ export class GraphService {
     });
   }
 
+  public getMainGraphScale(): number {
+    return this.zoomStateSubject.value.scale;
+  }
+
   /**
    * Request a zoom operation (focus on node or reset)
    * Single entry point for all zoom/pan operations

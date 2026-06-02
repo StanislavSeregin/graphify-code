@@ -93,7 +93,8 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.flowRenderer = new UseCaseFlowRenderer(this.flowSvgElement.nativeElement, {
       onServiceSelect: serviceId => this.activateFlowService(serviceId),
       onEndpointSelect: (serviceId, endpointKey) => this.activateFlowEndpoint(serviceId, endpointKey),
-      onStepSelect: stepIndex => this.activateFlowStep(stepIndex)
+      onStepSelect: stepIndex => this.activateFlowStep(stepIndex),
+      onCanvasClick: () => this.closeFlowOverlay()
     });
 
     this.graphService.graphData$
@@ -176,13 +177,25 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.activeFlowModel = buildUseCaseFlowModel(useCase, this.selectedService.serviceData, this.viewModel);
-    const step = this.findFlowStep(stepIndex);
     this.activeFlowStepIndex = stepIndex;
     this.activeFlowServiceId = null;
     this.activeFlowEndpointKey = null;
     this.activeFlowSelection = { type: 'step', stepIndex };
-    this.flowRenderer?.render(this.activeFlowModel, this.activeFlowSelection);
+    this.scheduleFlowRender();
     this.renderer?.highlightServices(this.activeFlowModel.serviceIds);
+  }
+
+  private scheduleFlowRender(): void {
+    if (!this.activeFlowModel) return;
+
+    requestAnimationFrame(() => {
+      if (!this.activeFlowModel) return;
+      this.flowRenderer?.render(
+        this.activeFlowModel,
+        this.activeFlowSelection,
+        this.graphService.getMainGraphScale()
+      );
+    });
   }
 
   activateFlowStep(stepIndex: number): void {

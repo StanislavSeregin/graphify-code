@@ -1,4 +1,9 @@
 import * as d3 from 'd3';
+import {
+  GRAPH_FIT_PADDING,
+  GRAPH_MAX_INITIAL_SCALE,
+  GRAPH_MIN_READABLE_SCALE
+} from './graph-layout';
 import { FlowEndpointGroup, FlowServiceGroup, FlowStepNode, UseCaseFlowModel } from './use-case-flow-model';
 
 const SERVICE_PADDING_X = 22;
@@ -13,10 +18,8 @@ const STEP_PADDING_X = 14;
 const STEP_PADDING_TOP = 14;
 const STEP_PADDING_BOTTOM = 14;
 const STEP_GAP = 14;
-const FLOW_PADDING = 72;
-const MIN_SCALE = 0.35;
-const MAX_SCALE = 1.35;
-const MAX_FIT_SCALE = 1;
+const MIN_SCALE = 0.45;
+const MAX_SCALE = 2.2;
 
 const STEP_MIN_WIDTH = 220;
 const STEP_MAX_WIDTH = 340;
@@ -40,6 +43,7 @@ export interface UseCaseFlowRendererCallbacks {
   onServiceSelect(serviceId: string): void;
   onEndpointSelect(serviceId: string, endpointKey: string): void;
   onStepSelect(stepIndex: number): void;
+  onCanvasClick(): void;
 }
 
 interface TextBlock {
@@ -89,26 +93,34 @@ export class UseCaseFlowRenderer {
   private model: UseCaseFlowModel | null = null;
   private layout: FlowLayout | null = null;
   private selection: FlowSelection = null;
+  private referenceScale: number | undefined;
 
   constructor(
-    svgElement: SVGSVGElement,
+    private readonly svgElement: SVGSVGElement,
     private readonly callbacks: UseCaseFlowRendererCallbacks
   ) {
     this.svg = d3.select(svgElement)
       .attr('role', 'img')
-      .attr('aria-label', 'Use case step flow');
+      .attr('aria-label', 'Use case step flow')
+      .on('click', event => {
+        if (event.target === svgElement) {
+          this.callbacks.onCanvasClick();
+        }
+      });
   }
 
-  render(model: UseCaseFlowModel, selection: FlowSelection): void {
+  render(model: UseCaseFlowModel, selection: FlowSelection, referenceScale?: number): void {
     this.model = model;
     this.selection = selection;
+    this.referenceScale = referenceScale;
     this.svg.selectAll('*').remove();
 
     this.createDefs();
     this.svg.append('rect')
       .attr('class', 'flow-backdrop')
       .attr('width', '100%')
-      .attr('height', '100%');
+      .attr('height', '100%')
+      .on('click', () => this.callbacks.onCanvasClick());
     this.root = this.svg.append('g').attr('class', 'flow-root');
     this.zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([MIN_SCALE, MAX_SCALE])
@@ -121,11 +133,7 @@ export class UseCaseFlowRenderer {
     this.drawEdges(model, layout);
     this.drawSteps(layout);
     this.updateActiveState(selection);
-    if (selection?.type === 'step') {
-      this.focusOnStep(selection.stepIndex, 250, false);
-    } else {
-      this.fitToView(layout, 250);
-    }
+    this.applyInitialView(layout, selection);
   }
 
   focusOnStep(stepIndex: number, duration = 450, preserveScale = true): void {
@@ -138,7 +146,7 @@ export class UseCaseFlowRenderer {
 
     const scale = preserveScale
       ? d3.zoomTransform(this.svg.node()!).k
-      : this.computeFitScale(this.layout);
+      : this.resolveInitialScale(this.computeStepFocusScale(step));
     const centerX = step.x + step.width / 2;
     const centerY = step.y + step.height / 2;
     const transform = d3.zoomIdentity
@@ -160,7 +168,7 @@ export class UseCaseFlowRenderer {
 
   resize(): void {
     if (this.model) {
-      this.render(this.model, this.selection);
+      this.render(this.model, this.selection, this.referenceScale);
     }
   }
 
@@ -168,6 +176,7 @@ export class UseCaseFlowRenderer {
     this.model = null;
     this.layout = null;
     this.selection = null;
+    this.referenceScale = undefined;
     this.svg.on('.zoom', null);
     this.svg.selectAll('*').remove();
     this.root = null;
@@ -339,17 +348,47 @@ export class UseCaseFlowRenderer {
     };
   }
 
-  private computeFitScale(layout: FlowLayout): number {
+  private applyInitialView(layout: FlowLayout, selection: FlowSelection): void {
+    if (selection?.type === 'step') {
+      this.focusOnStep(selection.stepIndex, 250, false);
+    } else {
+      this.fitToView(layout, 250);
+    }
+  }
+
+  private computeStepFocusScale(step: LayoutStep): number {
+    const margin = 80;
+    return this.computeBoundsFocusScale(
+      step.x - margin,
+      step.y - margin,
+      step.x + step.width + margin,
+      step.y + step.height + margin
+    );
+  }
+
+  private computeBoundsFocusScale(minX: number, minY: number, maxX: number, maxY: number): number {
     const { width, height } = this.viewportSize();
-    if (width === 0 || height === 0) return MAX_FIT_SCALE;
+    if (width === 0 || height === 0) return GRAPH_MIN_READABLE_SCALE;
+
+    const boundsWidth = Math.max(1, maxX - minX);
+    const boundsHeight = Math.max(1, maxY - minY);
+    const fitScale = Math.min(
+      (width - GRAPH_FIT_PADDING) / boundsWidth,
+      (height - GRAPH_FIT_PADDING) / boundsHeight
+    );
 
     return Math.min(
-      MAX_FIT_SCALE,
-      Math.max(MIN_SCALE, Math.min(
-        (width - FLOW_PADDING) / Math.max(1, layout.width),
-        (height - FLOW_PADDING) / Math.max(1, layout.height)
-      ))
+      GRAPH_MAX_INITIAL_SCALE,
+      Math.max(GRAPH_MIN_READABLE_SCALE, fitScale)
     );
+  }
+
+  private resolveInitialScale(fittedScale: number): number {
+    const reference = this.referenceScale;
+    const scale = reference != null && reference > 0
+      ? Math.max(fittedScale, reference)
+      : fittedScale;
+    return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
   }
 
   private applyTransform(transform: d3.ZoomTransform, duration: number): void {
@@ -365,7 +404,9 @@ export class UseCaseFlowRenderer {
     const { width, height } = this.viewportSize();
     if (!this.zoom || width === 0 || height === 0) return;
 
-    const scale = this.computeFitScale(layout);
+    const scale = this.resolveInitialScale(
+      this.computeBoundsFocusScale(0, 0, layout.width, layout.height)
+    );
     const transform = d3.zoomIdentity
       .translate((width - layout.width * scale) / 2, (height - layout.height * scale) / 2)
       .scale(scale);
