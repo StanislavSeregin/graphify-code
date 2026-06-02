@@ -227,14 +227,17 @@ export class GraphRenderer {
             }
           });
 
+        group.append('clipPath')
+          .attr('class', 'service-node-clip')
+          .append('rect');
+
         group.append('rect')
           .attr('class', 'service-node-card')
           .attr('rx', SERVICE_NODE_RADIUS);
 
         group.append('rect')
           .attr('class', 'service-node-accent')
-          .attr('width', 6)
-          .attr('rx', 3);
+          .attr('width', 5);
 
         group.append('text').attr('class', 'service-node-title');
         group.append('text').attr('class', 'service-node-description');
@@ -257,17 +260,29 @@ export class GraphRenderer {
   private populateNode(group: d3.Selection<SVGGElement, RenderNode, any, any>, node: RenderNode): void {
     const left = -node.layoutWidth / 2 + SERVICE_NODE_HORIZONTAL_PADDING;
     const top = -node.layoutHeight / 2;
+    const cardX = -node.layoutWidth / 2;
+    const clipId = serviceNodeClipId(node.id);
+
+    group.select<SVGClipPathElement>('clipPath.service-node-clip')
+      .attr('id', clipId)
+      .select('rect')
+      .attr('x', cardX)
+      .attr('y', top)
+      .attr('width', node.layoutWidth)
+      .attr('height', node.layoutHeight)
+      .attr('rx', SERVICE_NODE_RADIUS);
 
     group.select<SVGRectElement>('rect.service-node-card')
-      .attr('x', -node.layoutWidth / 2)
+      .attr('x', cardX)
       .attr('y', top)
       .attr('width', node.layoutWidth)
       .attr('height', node.layoutHeight);
 
     group.select<SVGRectElement>('rect.service-node-accent')
-      .attr('x', -node.layoutWidth / 2)
+      .attr('x', cardX)
       .attr('y', top)
-      .attr('height', node.layoutHeight);
+      .attr('height', node.layoutHeight)
+      .attr('clip-path', `url(#${clipId})`);
 
     group.select<SVGTextElement>('text.service-node-title')
       .attr('x', left)
@@ -534,4 +549,8 @@ function charsForWidth(width: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function serviceNodeClipId(nodeId: string): string {
+  return `service-node-clip-${nodeId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 }

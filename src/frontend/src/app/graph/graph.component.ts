@@ -197,6 +197,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     this.activeFlowEndpointKey = null;
     this.activeFlowSelection = { type: 'step', stepIndex };
     this.flowRenderer?.updateActiveState(this.activeFlowSelection);
+    this.flowRenderer?.focusOnStep(stepIndex);
     this.renderer?.highlightServices(this.activeFlowModel.serviceIds);
 
     window.setTimeout(() => {

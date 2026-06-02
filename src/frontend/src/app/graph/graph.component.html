@@ -54,6 +54,12 @@
 
       <svg #graphSvg class="graph-svg"></svg>
       <div class="flow-overlay" [class.open]="flowOverlayOpen" aria-label="Use case step flow">
+        @if (activeFlowModel; as flow) {
+          <header class="flow-header">
+            <span class="flow-header-eyebrow">Use case</span>
+            <h2>{{ flow.useCaseName }}</h2>
+          </header>
+        }
         <svg #flowSvg class="flow-svg"></svg>
       </div>
     </section>

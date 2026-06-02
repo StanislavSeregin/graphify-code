@@ -87,6 +87,7 @@ export class UseCaseFlowRenderer {
   private root: d3.Selection<SVGGElement, unknown, null, undefined> | null = null;
   private zoom: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
   private model: UseCaseFlowModel | null = null;
+  private layout: FlowLayout | null = null;
   private selection: FlowSelection = null;
 
   constructor(
@@ -115,12 +116,36 @@ export class UseCaseFlowRenderer {
     this.svg.call(this.zoom);
 
     const layout = buildLayout(model);
-    this.drawTitle(model);
+    this.layout = layout;
     this.drawContainers(layout);
     this.drawEdges(model, layout);
     this.drawSteps(layout);
     this.updateActiveState(selection);
-    this.fitToView(layout, 250);
+    if (selection?.type === 'step') {
+      this.focusOnStep(selection.stepIndex, 250, false);
+    } else {
+      this.fitToView(layout, 250);
+    }
+  }
+
+  focusOnStep(stepIndex: number, duration = 450, preserveScale = true): void {
+    if (!this.zoom || !this.layout) return;
+    const step = this.layout.stepsByIndex.get(stepIndex);
+    if (!step) return;
+
+    const { width, height } = this.viewportSize();
+    if (width === 0 || height === 0) return;
+
+    const scale = preserveScale
+      ? d3.zoomTransform(this.svg.node()!).k
+      : this.computeFitScale(this.layout);
+    const centerX = step.x + step.width / 2;
+    const centerY = step.y + step.height / 2;
+    const transform = d3.zoomIdentity
+      .translate(width / 2 - scale * centerX, height / 2 - scale * centerY)
+      .scale(scale);
+
+    this.applyTransform(transform, duration);
   }
 
   updateActiveState(selection: FlowSelection): void {
@@ -141,6 +166,7 @@ export class UseCaseFlowRenderer {
 
   clear(): void {
     this.model = null;
+    this.layout = null;
     this.selection = null;
     this.svg.on('.zoom', null);
     this.svg.selectAll('*').remove();
@@ -166,14 +192,6 @@ export class UseCaseFlowRenderer {
       .append('path')
       .attr('d', 'M0,-5L10,0L0,5')
       .attr('fill', '#7c3aed');
-  }
-
-  private drawTitle(model: UseCaseFlowModel): void {
-    this.root?.append('text')
-      .attr('class', 'flow-title')
-      .attr('x', 0)
-      .attr('y', -22)
-      .text(model.useCaseName);
   }
 
   private drawEdges(model: UseCaseFlowModel, layout: FlowLayout): void {
@@ -313,24 +331,46 @@ export class UseCaseFlowRenderer {
       });
   }
 
-  private fitToView(layout: FlowLayout, duration: number): void {
+  private viewportSize(): { width: number; height: number } {
     const element = this.svg.node();
-    const width = element?.clientWidth ?? 0;
-    const height = element?.clientHeight ?? 0;
-    if (!this.zoom || width === 0 || height === 0) return;
+    return {
+      width: element?.clientWidth ?? 0,
+      height: element?.clientHeight ?? 0
+    };
+  }
 
-    const scale = Math.min(
+  private computeFitScale(layout: FlowLayout): number {
+    const { width, height } = this.viewportSize();
+    if (width === 0 || height === 0) return MAX_FIT_SCALE;
+
+    return Math.min(
       MAX_FIT_SCALE,
       Math.max(MIN_SCALE, Math.min(
         (width - FLOW_PADDING) / Math.max(1, layout.width),
         (height - FLOW_PADDING) / Math.max(1, layout.height)
       ))
     );
+  }
+
+  private applyTransform(transform: d3.ZoomTransform, duration: number): void {
+    if (!this.zoom) return;
+    if (duration > 0) {
+      this.svg.transition().duration(duration).call(this.zoom.transform, transform);
+    } else {
+      this.svg.call(this.zoom.transform, transform);
+    }
+  }
+
+  private fitToView(layout: FlowLayout, duration: number): void {
+    const { width, height } = this.viewportSize();
+    if (!this.zoom || width === 0 || height === 0) return;
+
+    const scale = this.computeFitScale(layout);
     const transform = d3.zoomIdentity
-      .translate((width - layout.width * scale) / 2, (height - layout.height * scale) / 2 + 22)
+      .translate((width - layout.width * scale) / 2, (height - layout.height * scale) / 2)
       .scale(scale);
 
-    this.svg.transition().duration(duration).call(this.zoom.transform, transform);
+    this.applyTransform(transform, duration);
   }
 }
 
