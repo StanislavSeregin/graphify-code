@@ -1,7 +1,6 @@
 using GraphifyCode.Api.Models;
 using GraphifyCode.Data;
 using GraphifyCode.Data.Context;
-using GraphifyCode.Data.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -28,8 +27,8 @@ public class Program
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var services = await context.Services.ToArrayAsync(cancellationToken);
-            var data = ServicesDetails.FromEntities(services, true, true).ToMarkdown();
-            return Results.Text(data);
+            var graph = FullGraph.FromEntities(services);
+            return Results.Json(graph);
         });
 
         await app.RunAsync();

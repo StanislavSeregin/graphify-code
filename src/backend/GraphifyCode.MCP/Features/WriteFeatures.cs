@@ -208,9 +208,10 @@ public static class UpsertRelation
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var request = command.Request;
-            var service = await context.Services
-                .FirstOrDefaultAsync(s => s.UseCases.Any(uc => uc.Id == request.UseCaseId), cancellationToken);
-            if (service is null)
+            var useCase = await context.Services
+                .SelectMany(s => s.UseCases)
+                .FirstOrDefaultAsync(uc => uc.Id == request.UseCaseId, cancellationToken);
+            if (useCase is null)
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
@@ -222,7 +223,6 @@ public static class UpsertRelation
                     });
             }
 
-            var useCase = service.UseCases.First(uc => uc.Id == request.UseCaseId);
             if (request.EndpointId is { } endpointId && !context.Services.Any(s => s.Endpoints != null
                 && s.Endpoints.EndpointList.Any(e => e.Id == endpointId)))
             {

@@ -377,7 +377,7 @@ export class GraphService {
 
     // Invariant 1: Step references endpoint -> activate that endpoint
     if (step.endpointId) {
-      this.activateStepEndpoint(step.endpointId, parentServiceId, fullGraph);
+      this.activateStepEndpoint(step.endpointId, fullGraph);
       return;
     }
 
@@ -400,14 +400,13 @@ export class GraphService {
   /**
    * Activate a specific endpoint referenced by a step
    */
-  private activateStepEndpoint(endpointId: string, parentServiceId: string, fullGraph: FullGraph): void {
+  private activateStepEndpoint(endpointId: string, fullGraph: FullGraph): void {
     for (const serviceData of fullGraph.services) {
       const endpoint = serviceData.endpoint.find(ep => ep.id === endpointId);
       if (endpoint) {
-        // If endpoint is in a different service, focus on that service first
-        if (serviceData.service.id !== parentServiceId) {
-          this.focusOnService(serviceData.service.id);
-        }
+        // Always focus the service that owns the endpoint (e.g. when returning
+        // from a step on another service, main graph may still be zoomed there).
+        this.focusOnService(serviceData.service.id);
         this.focusOnEndpoint(endpoint.id);
         this.showEndpointDetails(endpoint, serviceData, fullGraph);
         break;
