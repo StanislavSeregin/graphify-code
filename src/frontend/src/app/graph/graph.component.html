@@ -1,56 +1,247 @@
-<mat-sidenav-container class="graph-sidenav-container">
-  <!-- Left sidebar for endpoint details -->
-  <mat-sidenav #endpointSidenav position="start" mode="side" [opened]="endpointSidebarOpen" [disableClose]="true">
-    <app-endpoint-sidebar [data]="endpointSidebarData"></app-endpoint-sidebar>
-  </mat-sidenav>
-
-  <!-- Right sidebar for use case steps -->
-  <mat-sidenav #useCaseSidenav position="end" mode="side" [opened]="useCaseSidebarOpen" [disableClose]="true">
-    <app-usecase-sidebar [data]="useCaseSidebarData"></app-usecase-sidebar>
-  </mat-sidenav>
-
-  <!-- Main content -->
-  <mat-sidenav-content>
-    <div class="graph-container">
-      <svg #graphSvg>
-        <defs>
-          <!-- Shadows -->
-          <filter id="card-shadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
-            <feOffset dx="0" dy="4" result="offsetblur"/>
-            <feComponentTransfer>
-              <feFuncA type="linear" slope="0.2"/>
-            </feComponentTransfer>
-            <feMerge>
-              <feMergeNode/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-          <filter id="card-shadow-hover" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
-            <feOffset dx="0" dy="8" result="offsetblur"/>
-            <feComponentTransfer>
-              <feFuncA type="linear" slope="0.25"/>
-            </feComponentTransfer>
-            <feMerge>
-              <feMergeNode/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-
-          <!-- Arrow marker -->
-          <marker
-            id="arrow"
-            viewBox="0 0 10 10"
-            refX="9"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#4A90E2" />
-          </marker>
-        </defs>
-      </svg>
+<section class="graph-page">
+  <header class="graph-topbar">
+    <div>
+      <h1>GraphifyCode</h1>
+      <p>Graph-first architecture map from Markdown. Edit the source of truth via MCP.</p>
     </div>
-  </mat-sidenav-content>
-</mat-sidenav-container>
+
+    <div class="graph-stats" aria-label="Graph counters">
+      <span>{{ serviceCount }} services</span>
+      <span>{{ endpointCount }} endpoints</span>
+      <span>{{ useCaseCount }} use cases</span>
+    </div>
+
+    <div class="graph-actions">
+      <button mat-stroked-button type="button" (click)="resetView()">
+        <mat-icon>center_focus_strong</mat-icon>
+        Reset view
+      </button>
+      <button mat-flat-button color="primary" type="button" (click)="onReload()" [disabled]="isBusy$ | async">
+        <mat-icon>refresh</mat-icon>
+        Reload
+      </button>
+    </div>
+  </header>
+
+  @if (isBusy$ | async) {
+    <mat-progress-bar mode="indeterminate" class="graph-progress"></mat-progress-bar>
+  }
+
+  <main class="graph-workspace" [class.panel-open]="panelOpen">
+    <section class="graph-canvas-card">
+      <div class="graph-help">
+        <span><mat-icon>mouse</mat-icon> Drag to pan</span>
+        <span><mat-icon>zoom_in</mat-icon> Scroll to zoom</span>
+        <span><mat-icon>ads_click</mat-icon> Click a service for details</span>
+        <span><mat-icon>keyboard</mat-icon> Esc resets</span>
+      </div>
+
+      @if (error$ | async; as errorMessage) {
+        <div class="graph-overlay graph-overlay--error" role="alert">
+          <mat-icon>error_outline</mat-icon>
+          <h2>Graph failed to load</h2>
+          <p>{{ errorMessage }}</p>
+          <button mat-flat-button color="primary" type="button" (click)="onReload()">Retry</button>
+        </div>
+      } @else if ((graphData$ | async)?.services?.length === 0 && !(isBusy$ | async)) {
+        <div class="graph-overlay">
+          <mat-icon>hub</mat-icon>
+          <h2>No services yet</h2>
+          <p>Document services and use cases with MCP tools, then reload this graph.</p>
+          <button mat-stroked-button type="button" (click)="onReload()">Reload</button>
+        </div>
+      }
+
+      <svg #graphSvg class="graph-svg"></svg>
+    </section>
+
+    <aside class="details-panel" [class.open]="panelOpen" aria-label="Graph details">
+      @if (selectedService; as service) {
+        <div class="details-header">
+          <div>
+            <span class="eyebrow">Service</span>
+            <h2>{{ service.serviceData.service.name }}</h2>
+            <p>{{ service.isExternal ? 'External system' : 'Documented service' }}</p>
+          </div>
+          <button mat-icon-button type="button" (click)="closePanel()" aria-label="Close details">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <div class="details-tabs" role="tablist">
+          <button type="button" [class.active]="detailMode === 'service'" (click)="selectService(service.id)">
+            Overview
+          </button>
+          <button
+            type="button"
+            [class.active]="detailMode === 'endpoint'"
+            [disabled]="service.endpointCount === 0"
+            (click)="service.serviceData.endpoint[0] && selectEndpoint(service.serviceData.endpoint[0].id)">
+            Endpoints
+          </button>
+          <button
+            type="button"
+            [class.active]="detailMode === 'useCase'"
+            [disabled]="service.useCaseCount === 0"
+            (click)="service.serviceData.useCases[0] && selectUseCase(service.serviceData.useCases[0].id)">
+            Use cases
+          </button>
+        </div>
+
+        @if (detailMode === 'service') {
+          <section class="details-section">
+            <h3>Summary</h3>
+            <p class="description">{{ service.serviceData.service.description || 'No description provided.' }}</p>
+
+            <dl class="metadata-grid">
+              <div>
+                <dt>Last analyzed</dt>
+                <dd>{{ formatLastAnalyzed(service.serviceData.service.lastAnalyzedAt) }}</dd>
+              </div>
+              <div>
+                <dt>Code path</dt>
+                <dd>{{ service.serviceData.service.relativeCodePath || 'External service' }}</dd>
+              </div>
+              <div>
+                <dt>Endpoints</dt>
+                <dd>{{ service.endpointCount }}</dd>
+              </div>
+              <div>
+                <dt>Use cases</dt>
+                <dd>{{ service.useCaseCount }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="details-section">
+            <h3>Endpoints</h3>
+            @if (service.serviceData.endpoint.length > 0) {
+              <div class="entity-list">
+                @for (endpoint of service.serviceData.endpoint; track endpoint.id) {
+                  <button type="button" class="entity-row" (click)="selectEndpoint(endpoint.id)">
+                    <mat-icon>{{ endpoint.type === 'job' ? 'schedule' : endpoint.type === 'queue' ? 'mail' : 'http' }}</mat-icon>
+                    <span>{{ endpoint.name }}</span>
+                    <small>{{ endpointTypeLabel(endpoint.type) }}</small>
+                  </button>
+                }
+              </div>
+            } @else {
+              <p class="empty-panel-message">No endpoints documented.</p>
+            }
+          </section>
+
+          <section class="details-section">
+            <h3>Use cases</h3>
+            @if (service.serviceData.useCases.length > 0) {
+              <div class="entity-list">
+                @for (useCase of service.serviceData.useCases; track useCase.id) {
+                  <button type="button" class="entity-row" (click)="selectUseCase(useCase.id)">
+                    <mat-icon>account_tree</mat-icon>
+                    <span>{{ useCase.name }}</span>
+                    <small>{{ useCase.steps.length }} steps</small>
+                  </button>
+                }
+              </div>
+            } @else {
+              <p class="empty-panel-message">No use cases documented.</p>
+            }
+          </section>
+        }
+
+        @if (detailMode === 'endpoint' && selectedEndpoint; as endpointRef) {
+          <section class="details-section">
+            <span class="eyebrow">Endpoint</span>
+            <h3>{{ endpointRef.endpoint.name }}</h3>
+            <p class="description">{{ endpointRef.endpoint.description || 'No description provided.' }}</p>
+            <dl class="metadata-grid">
+              <div>
+                <dt>Type</dt>
+                <dd>{{ endpointTypeLabel(endpointRef.endpoint.type) }}</dd>
+              </div>
+              <div>
+                <dt>Last analyzed</dt>
+                <dd>{{ formatLastAnalyzed(endpointRef.endpoint.lastAnalyzedAt) }}</dd>
+              </div>
+              <div class="wide">
+                <dt>Code path</dt>
+                <dd>{{ endpointRef.endpoint.relativeCodePath || 'Not linked' }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="details-section">
+            <h3>Related use cases</h3>
+            @if (endpointUseCases(endpointRef.endpoint.id).length > 0) {
+              <div class="entity-list">
+                @for (reference of endpointUseCases(endpointRef.endpoint.id); track reference.useCase.id) {
+                  <button type="button" class="entity-row" (click)="selectUseCase(reference.useCase.id)">
+                    <mat-icon>playlist_play</mat-icon>
+                    <span>{{ reference.useCase.name }}</span>
+                    <small>{{ reference.service.service.name }}</small>
+                  </button>
+                }
+              </div>
+            } @else {
+              <p class="empty-panel-message">No use cases reference this endpoint.</p>
+            }
+          </section>
+
+          <section class="details-section">
+            <h3>Calling services</h3>
+            @if (relatedServices(endpointRef.endpoint.id).length > 0) {
+              <div class="entity-list">
+                @for (related of relatedServices(endpointRef.endpoint.id); track related.id) {
+                  <button type="button" class="entity-row" (click)="selectService(related.id, true)">
+                    <mat-icon>{{ related.isExternal ? 'link' : 'apps' }}</mat-icon>
+                    <span>{{ related.serviceData.service.name }}</span>
+                  </button>
+                }
+              </div>
+            } @else {
+              <p class="empty-panel-message">No incoming calls documented.</p>
+            }
+          </section>
+        }
+
+        @if (detailMode === 'useCase' && selectedUseCase; as useCaseRef) {
+          <section class="details-section">
+            <span class="eyebrow">Use case</span>
+            <h3>{{ useCaseRef.useCase.name }}</h3>
+            <p class="description">{{ useCaseRef.useCase.description || 'No description provided.' }}</p>
+            <dl class="metadata-grid">
+              <div>
+                <dt>Last analyzed</dt>
+                <dd>{{ formatLastAnalyzed(useCaseRef.useCase.lastAnalyzedAt) }}</dd>
+              </div>
+              <div>
+                <dt>Steps</dt>
+                <dd>{{ useCaseRef.useCase.steps.length }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="details-section">
+            <h3>Steps</h3>
+            <div class="timeline">
+              @for (step of useCaseRef.useCase.steps; track $index) {
+                <button type="button" class="timeline-step" (click)="selectStep(step)">
+                  <span class="step-index">{{ $index + 1 }}</span>
+                  <span>
+                    <strong>{{ step.name }}</strong>
+                    <small>{{ step.description || 'No description provided.' }}</small>
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+        }
+      } @else {
+        <div class="details-empty">
+          <mat-icon>near_me</mat-icon>
+          <h2>Select a service</h2>
+          <p>Click a service node to inspect endpoints, use cases and dependency steps.</p>
+        </div>
+      }
+    </aside>
+  </main>
+</section>

@@ -3,8 +3,6 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subject, firstValueFrom } from 'rxjs';
 import { map, distinctUntilChanged, filter } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
-import { EndpointSidebarData } from './service/endpoint/endpoint-sidebar.component';
-import { UseCaseSidebarData } from './service/usecase/usecase-sidebar.component';
 import * as d3 from 'd3';
 
 // ============================================================================
@@ -60,6 +58,21 @@ export type FullGraph = {
   services: ServiceData[];
 };
 
+export interface EndpointSidebarData {
+  endpoint: Endpoint;
+  service: ServiceData;
+  relatedServices: ServiceData[];
+  useCases: UseCase[];
+  externalUseCases: Array<{ useCase: UseCase; service: ServiceData }>;
+}
+
+export interface UseCaseSidebarData {
+  useCase: UseCase;
+  service: ServiceData;
+  allServices?: ServiceData[];
+  stepIndex?: number;
+}
+
 // ============================================================================
 // UI State Types
 // ============================================================================
@@ -104,7 +117,10 @@ export type UseCaseSidebarRequest = SidebarRequest<UseCaseSidebarData>;
 })
 export class GraphService {
   private readonly apiUrl = environment.apiUrl;
-  private readonly SERVICE_CARD_FULL_THRESHOLD = 1.0;
+  /** Hysteresis avoids flicker when zoom hovers near the threshold. */
+  private readonly SERVICE_CARD_FULL_THRESHOLD_ON = 0.95;
+  private readonly SERVICE_CARD_FULL_THRESHOLD_OFF = 0.82;
+  private currentDisplayMode: DisplayMode = 'compact';
 
   // ============================================================================
   // Private State
@@ -155,9 +171,9 @@ export class GraphService {
     distinctUntilChanged()
   );
 
-  // Display mode observables
+  // Display mode observables (hysteresis)
   public displayMode$: Observable<DisplayMode> = this.zoomState$.pipe(
-    map(state => state.scale >= this.SERVICE_CARD_FULL_THRESHOLD ? 'full' : 'compact'),
+    map(state => this.resolveDisplayMode(state.scale)),
     distinctUntilChanged()
   );
 
@@ -194,7 +210,9 @@ export class GraphService {
 
       this.graphDataSubject.next(fullGraph);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load graph data';
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Failed to load graph data';
       console.error('Failed to load graph data:', error);
       this.errorSubject.next(errorMessage);
     } finally {
@@ -260,7 +278,7 @@ export class GraphService {
    */
   public handleEscapeKey(): void {
     const { scale } = this.zoomStateSubject.value;
-    const isZoomedIn = scale >= this.SERVICE_CARD_FULL_THRESHOLD;
+    const isZoomedIn = scale >= this.SERVICE_CARD_FULL_THRESHOLD_ON;
 
     if (!isZoomedIn) {
       // At overview level: reset main graph
@@ -291,10 +309,7 @@ export class GraphService {
    * Open endpoint sidebar with endpoint details
    */
   public showEndpointDetails(endpoint: Endpoint, service: ServiceData, fullGraph: FullGraph): void {
-    // Find related services (services that call this endpoint)
-    const relatedServices = fullGraph.services.filter(s =>
-      s.relations.targetEndpointIds.includes(endpoint.id)
-    );
+    const relatedServices = this.findRelatedServicesForEndpoint(endpoint.id, fullGraph);
 
     // Find use cases where this endpoint is involved (within the same service)
     const useCases = service.useCases.filter(uc =>
@@ -331,14 +346,36 @@ export class GraphService {
       action: 'open',
       data: { useCase, service, allServices: fullGraph.services, stepIndex }
     });
+  }
 
-    // Also open endpoint sidebar with initiating endpoint
-    const initiatingEndpoint = service.endpoint.find(
-      ep => ep.id === useCase.initiatingEndpointId
-    );
-    if (initiatingEndpoint) {
-      this.showEndpointDetails(initiatingEndpoint, service, fullGraph);
+  /**
+   * Services that call this endpoint (from relations API and use-case steps).
+   */
+  public findRelatedServicesForEndpoint(endpointId: string, fullGraph: FullGraph): ServiceData[] {
+    const relatedIds = new Set<string>();
+
+    fullGraph.services.forEach(s => {
+      if (s.relations.targetEndpointIds.includes(endpointId)) {
+        relatedIds.add(s.service.id);
+      }
+      s.useCases.forEach(uc => {
+        const callsEndpoint = uc.steps.some(step => step.endpointId === endpointId);
+        if (callsEndpoint) {
+          relatedIds.add(s.service.id);
+        }
+      });
+    });
+
+    return fullGraph.services.filter(s => relatedIds.has(s.service.id));
+  }
+
+  private resolveDisplayMode(scale: number): DisplayMode {
+    if (this.currentDisplayMode === 'compact' && scale >= this.SERVICE_CARD_FULL_THRESHOLD_ON) {
+      this.currentDisplayMode = 'full';
+    } else if (this.currentDisplayMode === 'full' && scale < this.SERVICE_CARD_FULL_THRESHOLD_OFF) {
+      this.currentDisplayMode = 'compact';
     }
+    return this.currentDisplayMode;
   }
 
   /**
