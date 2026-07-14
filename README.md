@@ -26,12 +26,14 @@ Instead of loading entire documentation, query specific pieces: services, endpoi
 
 ```
 /graph-data/
-  /{service-guid}/
-    service.md             # Service metadata
-    endpoints.md           # Service endpoints
+  /{service-name}/
+    service.md             # Service metadata (# Name is identity)
+    endpoints.md           # Service endpoints (## Name is identity within service)
     /usecases/
-      {usecase-guid}.md    # Use cases and relation steps
+      {use-case-name}.md   # Use cases and relation steps (file name = use case Name)
 ```
+
+Identity is the domain `Name`: service names are unique globally; endpoint and use case names are unique within a service. Paths reuse those names (Unicode and spaces allowed; OS-invalid filename characters are rejected). Cross-references in markdown use `InitiatingEndpointName`, `ServiceName`, and `EndpointName`.
 
 Markdown files with guaranteed schema, queryable through MCP tools.
 
@@ -77,21 +79,20 @@ All tools return a unified response envelope:
 - `BatchErrorDetails`
 
 **Read / discover:**
-- `list_services` - All services with compact metadata and markdown snapshot
-- `get_service` - One service by ID, with optional endpoints/use cases
-- `get_use_case` - One use case by ID with detailed steps
-- `list_endpoints` - Endpoints for a service without loading full service details
-- `list_use_cases` - Use cases for a service without loading full service details
-- `search_graph` - Text search across service/endpoint/use case names, descriptions, and code paths
+- `list_services` — all services; use returned `Name` as the service key everywhere else
+- `get_service` — one service by `serviceName`, optionally with endpoints/use cases
+- `get_use_case` — one use case by `serviceName` + `useCaseName`
+- `list_endpoints` — endpoints for a service (`Name` unique within the service)
+- `list_use_cases` — use cases for a service (`Name` unique within the service)
+- `search_graph` — text search; matches include `EntityName` and `ServiceName`
 
 **Write / mutate:**
-- `upsert_service` - Create or update service
-- `upsert_endpoint` - Create or update endpoint in service
-- `upsert_use_case` - Create or update use case in service
-- `upsert_relation` - Create or update use case step relation
-- `bulk_upsert_endpoint` - Batch endpoint upsert with partial success reporting
-- `bulk_upsert_relation` - Batch relation upsert with partial success reporting
-- `remove_entity` - Remove `Service` / `Endpoint` / `UseCase` by typed enum
+- `upsert_service` — create/update by service `Name`
+- `upsert_endpoint` — create/update by `serviceName` + endpoint `Name`
+- `upsert_use_case` — create/update by `serviceName` + use case `Name`
+- `upsert_relation` — create/update a step by `serviceName` + `useCaseName` + `stepName`
+- `bulk_upsert_endpoint` / `bulk_upsert_relation` — same keys, partial success
+- `remove_entity` — delete by entity `Name` (`serviceName` required for Endpoint and UseCase)
 
 ### Batch Behavior
 
@@ -120,7 +121,7 @@ Find all entities related to "payments"
 ```
 
 ```
-Upsert endpoint "GET /api/users" in service {service-id}
+Upsert endpoint "GET /api/users" in service UserService
 ```
 
 ## Architecture

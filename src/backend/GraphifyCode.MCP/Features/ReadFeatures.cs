@@ -37,7 +37,7 @@ public static class ListServices
 
 public static class GetService
 {
-    public sealed record Query(Guid ServiceId, bool IncludeEndpoints, bool IncludeUseCases) : IRequest<McpResult<GetServiceData>>;
+    public sealed record Query(string ServiceName, bool IncludeEndpoints, bool IncludeUseCases) : IRequest<McpResult<GetServiceData>>;
 
     public sealed class Handler(GraphifyContext context) : IRequestHandler<Query, McpResult<GetServiceData>>
     {
@@ -46,18 +46,18 @@ public static class GetService
             await context.EnsureDataLoadedAsync(cancellationToken);
             var service = await context.Services
                 .AsNoTracking()
-                .Where(s => s.Id == request.ServiceId)
+                .Where(s => s.Name == request.ServiceName)
                 .ToArrayAsync(cancellationToken);
 
             if (service.Length == 0)
             {
                 return McpResult<GetServiceData>.Failure(
                     "not_found",
-                    $"Service '{request.ServiceId}' not found.",
+                    $"Service '{request.ServiceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = request.ServiceId
+                        EntityName = request.ServiceName
                     });
             }
 
@@ -73,7 +73,7 @@ public static class GetService
 
 public static class GetUseCase
 {
-    public sealed record Query(Guid UseCaseId) : IRequest<McpResult<GetUseCaseData>>;
+    public sealed record Query(string ServiceName, string UseCaseName) : IRequest<McpResult<GetUseCaseData>>;
 
     public sealed class Handler(GraphifyContext context) : IRequestHandler<Query, McpResult<GetUseCaseData>>
     {
@@ -82,19 +82,21 @@ public static class GetUseCase
             await context.EnsureDataLoadedAsync(cancellationToken);
             var useCase = await context.Services
                 .AsNoTracking()
+                .Where(s => s.Name == request.ServiceName)
                 .SelectMany(s => s.UseCases)
-                .Where(uc => uc.Id == request.UseCaseId)
+                .Where(uc => uc.Name == request.UseCaseName)
                 .ToArrayAsync(cancellationToken);
 
             if (useCase.Length == 0)
             {
                 return McpResult<GetUseCaseData>.Failure(
                     "not_found",
-                    $"Use case '{request.UseCaseId}' not found.",
+                    $"Use case '{request.UseCaseName}' not found in service '{request.ServiceName}'.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.UseCase,
-                        EntityId = request.UseCaseId
+                        EntityName = request.UseCaseName,
+                        ServiceName = request.ServiceName
                     });
             }
 
@@ -110,7 +112,7 @@ public static class GetUseCase
 
 public static class ListEndpoints
 {
-    public sealed record Query(Guid ServiceId) : IRequest<McpResult<ListEndpointsData>>;
+    public sealed record Query(string ServiceName) : IRequest<McpResult<ListEndpointsData>>;
 
     public sealed class Handler(GraphifyContext context) : IRequestHandler<Query, McpResult<ListEndpointsData>>
     {
@@ -118,27 +120,25 @@ public static class ListEndpoints
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var service = await context.Services
-                .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
+                .FirstOrDefaultAsync(s => s.Name == request.ServiceName, cancellationToken);
 
             if (service is null)
             {
                 return McpResult<ListEndpointsData>.Failure(
                     "not_found",
-                    $"Service '{request.ServiceId}' not found.",
+                    $"Service '{request.ServiceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = request.ServiceId
+                        EntityName = request.ServiceName
                     });
             }
 
             var data = new ListEndpointsData
             {
-                ServiceId = service.Id,
                 ServiceName = service.Name,
                 Endpoints = [.. (service.Endpoints?.EndpointList ?? []).Select(endpoint => new EndpointSummary
                 {
-                    EndpointId = endpoint.Id,
                     Name = endpoint.Name,
                     Description = endpoint.Description,
                     Type = endpoint.Type,
@@ -153,7 +153,7 @@ public static class ListEndpoints
 
 public static class ListUseCases
 {
-    public sealed record Query(Guid ServiceId) : IRequest<McpResult<ListUseCasesData>>;
+    public sealed record Query(string ServiceName) : IRequest<McpResult<ListUseCasesData>>;
 
     public sealed class Handler(GraphifyContext context) : IRequestHandler<Query, McpResult<ListUseCasesData>>
     {
@@ -161,30 +161,28 @@ public static class ListUseCases
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var service = await context.Services
-                .FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
+                .FirstOrDefaultAsync(s => s.Name == request.ServiceName, cancellationToken);
 
             if (service is null)
             {
                 return McpResult<ListUseCasesData>.Failure(
                     "not_found",
-                    $"Service '{request.ServiceId}' not found.",
+                    $"Service '{request.ServiceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = request.ServiceId
+                        EntityName = request.ServiceName
                     });
             }
 
             var data = new ListUseCasesData
             {
-                ServiceId = service.Id,
                 ServiceName = service.Name,
                 UseCases = [.. (service.UseCases ?? []).Select(useCase => new UseCaseSummary
                 {
-                    UseCaseId = useCase.Id,
                     Name = useCase.Name,
                     Description = useCase.Description,
-                    InitiatingEndpointId = useCase.InitiatingEndpointId
+                    InitiatingEndpointName = useCase.InitiatingEndpointName
                 })]
             };
 
@@ -223,9 +221,8 @@ public static class SearchGraph
                 ? [new SearchMatch
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = service.Id,
-                        ServiceId = service.Id,
-                        Name = service.Name,
+                        EntityName = service.Name,
+                        ServiceName = service.Name,
                         RelativeCodePath = service.RelativeCodePath
                     }]
                 : [];
@@ -235,9 +232,8 @@ public static class SearchGraph
                 .Select(endpoint => new SearchMatch
                 {
                     EntityType = GraphEntityType.Endpoint,
-                    EntityId = endpoint.Id,
-                    ServiceId = service.Id,
-                    Name = endpoint.Name,
+                    EntityName = endpoint.Name,
+                    ServiceName = service.Name,
                     RelativeCodePath = endpoint.RelativeCodePath
                 });
 
@@ -246,9 +242,8 @@ public static class SearchGraph
                 .Select(useCase => new SearchMatch
                 {
                     EntityType = GraphEntityType.UseCase,
-                    EntityId = useCase.Id,
-                    ServiceId = service.Id,
-                    Name = useCase.Name,
+                    EntityName = useCase.Name,
+                    ServiceName = service.Name,
                     RelativeCodePath = null
                 });
 

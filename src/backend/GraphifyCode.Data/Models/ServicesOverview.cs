@@ -1,4 +1,4 @@
-﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Entities;
 using GraphifyCode.Markdown;
 using System;
 using System.Collections.Generic;
@@ -17,7 +17,6 @@ public partial class ServicesOverview
         {
             ServiceList = [.. services.Select(srv => new ServicesOverviewItem()
             {
-                Id = srv.Id,
                 Name = srv.Name,
                 Description = srv.Description,
                 LastAnalyzedAt = srv.LastAnalyzedAt,
@@ -30,8 +29,6 @@ public partial class ServicesOverview
 [MarkdownSerializable]
 public partial class ServicesOverviewItem
 {
-    public Guid Id { get; set; }
-
     [MarkdownHeader]
     public required string Name { get; set; }
 

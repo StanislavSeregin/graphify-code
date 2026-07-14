@@ -1,4 +1,4 @@
-﻿using GraphifyCode.Markdown;
+using GraphifyCode.Markdown;
 using System;
 using System.Collections.Generic;
 
@@ -16,8 +16,6 @@ public partial class Endpoints
 [MarkdownSerializable]
 public partial class Endpoint
 {
-    public Guid Id { get; set; }
-
     [MarkdownHeader]
     public required string Name { get; set; }
 

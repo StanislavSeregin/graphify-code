@@ -21,14 +21,24 @@ public static class UpsertService
             await context.EnsureDataLoadedAsync(cancellationToken);
             var request = command.Request;
 
-            var entity = request.ServiceId is { } serviceId
-                ? await context.Services.FirstOrDefaultAsync(s => s.Id == serviceId, cancellationToken)
-                : null;
+            if (!PathIdentity.IsValidSegment(request.Name))
+            {
+                return McpResult<MutationResultData>.Failure(
+                    "validation_error",
+                    "Service name is not a valid path identity segment.",
+                    new ValidationErrorDetails
+                    {
+                        Field = nameof(request.Name),
+                        Reason = "Name must be a non-empty filesystem-safe segment."
+                    });
+            }
+
+            var entity = await context.Services
+                .FirstOrDefaultAsync(s => s.Name == request.Name, cancellationToken);
 
             var action = entity is null ? "created" : "updated";
             entity ??= new Service
             {
-                Id = request.ServiceId ?? Guid.NewGuid(),
                 Name = request.Name,
                 Description = request.Description,
                 RelativeCodePath = request.RelativeCodePath,
@@ -37,7 +47,6 @@ public static class UpsertService
                 UseCases = []
             };
 
-            entity.Name = request.Name;
             entity.Description = request.Description;
             entity.RelativeCodePath = request.RelativeCodePath;
             entity.LastAnalyzedAt = DateTime.UtcNow;
@@ -51,7 +60,8 @@ public static class UpsertService
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.Service,
-                EntityId = entity.Id,
+                EntityName = entity.Name,
+                ServiceName = entity.Name,
                 Action = action
             });
         }
@@ -68,30 +78,29 @@ public static class UpsertEndpoint
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var request = command.Request;
-            var service = await context.Services.FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
+            var service = await context.Services
+                .FirstOrDefaultAsync(s => s.Name == request.ServiceName, cancellationToken);
             if (service is null)
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
-                    $"Service '{request.ServiceId}' not found.",
+                    $"Service '{request.ServiceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = request.ServiceId
+                        EntityName = request.ServiceName
                     });
             }
 
             service.Endpoints ??= new Endpoints { Parent = service, EndpointList = [] };
             service.Endpoints.Parent = service;
 
-            var endpoint = request.EndpointId is { } endpointId
-                ? service.Endpoints.EndpointList.FirstOrDefault(e => e.Id == endpointId)
-                : null;
+            var endpoint = service.Endpoints.EndpointList
+                .FirstOrDefault(e => PathIdentity.NamesEqual(e.Name, request.Name));
 
             var action = endpoint is null ? "created" : "updated";
             endpoint ??= new Endpoint
             {
-                Id = request.EndpointId ?? Guid.NewGuid(),
                 Name = request.Name,
                 Description = request.Description,
                 Type = request.Type,
@@ -99,7 +108,6 @@ public static class UpsertEndpoint
                 LastAnalyzedAt = DateTime.UtcNow
             };
 
-            endpoint.Name = request.Name;
             endpoint.Description = request.Description;
             endpoint.Type = request.Type;
             endpoint.RelativeCodePath = request.RelativeCodePath;
@@ -114,7 +122,8 @@ public static class UpsertEndpoint
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.Endpoint,
-                EntityId = endpoint.Id,
+                EntityName = endpoint.Name,
+                ServiceName = service.Name,
                 Action = action
             });
         }
@@ -131,45 +140,57 @@ public static class UpsertUseCase
         {
             await context.EnsureDataLoadedAsync(cancellationToken);
             var request = command.Request;
-            var service = await context.Services.FirstOrDefaultAsync(s => s.Id == request.ServiceId, cancellationToken);
+
+            if (!PathIdentity.IsValidSegment(request.Name))
+            {
+                return McpResult<MutationResultData>.Failure(
+                    "validation_error",
+                    "Use case name is not a valid path identity segment.",
+                    new ValidationErrorDetails
+                    {
+                        Field = nameof(request.Name),
+                        Reason = "Name must be a non-empty filesystem-safe segment."
+                    });
+            }
+
+            var service = await context.Services
+                .FirstOrDefaultAsync(s => s.Name == request.ServiceName, cancellationToken);
             if (service is null)
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
-                    $"Service '{request.ServiceId}' not found.",
+                    $"Service '{request.ServiceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = request.ServiceId
+                        EntityName = request.ServiceName
                     });
             }
 
-            if (!HasEndpoint(service, request.InitiatingEndpointId))
+            if (!HasEndpoint(service, request.InitiatingEndpointName))
             {
                 return McpResult<MutationResultData>.Failure(
                     "validation_error",
                     "Initiating endpoint does not belong to the target service.",
                     new ValidationErrorDetails
                     {
-                        Field = nameof(request.InitiatingEndpointId),
+                        Field = nameof(request.InitiatingEndpointName),
                         Reason = "Endpoint must exist inside the target service."
                     });
             }
 
-            var useCase = request.UseCaseId is { } useCaseId
-                ? service.UseCases.FirstOrDefault(u => u.Id == useCaseId)
-                : null;
+            var useCase = service.UseCases
+                .FirstOrDefault(u => PathIdentity.NamesEqual(u.Name, request.Name));
 
             var action = useCase is null ? "created" : "updated";
             if (useCase is null)
             {
                 useCase = new UseCase
                 {
-                    Id = request.UseCaseId ?? Guid.NewGuid(),
                     Parent = service,
                     Name = request.Name,
                     Description = request.Description,
-                    InitiatingEndpointId = request.InitiatingEndpointId,
+                    InitiatingEndpointName = request.InitiatingEndpointName,
                     LastAnalyzedAt = DateTime.UtcNow,
                     Steps = []
                 };
@@ -177,23 +198,23 @@ public static class UpsertUseCase
             }
 
             useCase.Parent = service;
-            useCase.Name = request.Name;
             useCase.Description = request.Description;
-            useCase.InitiatingEndpointId = request.InitiatingEndpointId;
+            useCase.InitiatingEndpointName = request.InitiatingEndpointName;
             useCase.LastAnalyzedAt = DateTime.UtcNow;
 
             await context.SaveChangesAsync(cancellationToken);
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.UseCase,
-                EntityId = useCase.Id,
+                EntityName = useCase.Name,
+                ServiceName = service.Name,
                 Action = action
             });
         }
 
-        private static bool HasEndpoint(Service service, Guid endpointId)
+        private static bool HasEndpoint(Service service, string endpointName)
         {
-            return service.Endpoints?.EndpointList.Any(e => e.Id == endpointId) is true;
+            return service.Endpoints?.EndpointList.Any(e => PathIdentity.NamesEqual(e.Name, endpointName)) is true;
         }
     }
 }
@@ -209,42 +230,53 @@ public static class UpsertRelation
             await context.EnsureDataLoadedAsync(cancellationToken);
             var request = command.Request;
             var useCase = await context.Services
+                .Where(s => s.Name == request.ServiceName)
                 .SelectMany(s => s.UseCases)
-                .FirstOrDefaultAsync(uc => uc.Id == request.UseCaseId, cancellationToken);
+                .FirstOrDefaultAsync(uc => uc.Name == request.UseCaseName, cancellationToken);
             if (useCase is null)
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
-                    $"Use case '{request.UseCaseId}' not found.",
+                    $"Use case '{request.UseCaseName}' not found in service '{request.ServiceName}'.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.UseCase,
-                        EntityId = request.UseCaseId
+                        EntityName = request.UseCaseName,
+                        ServiceName = request.ServiceName
                     });
             }
 
-            if (request.EndpointId is { } endpointId && !context.Services.Any(s => s.Endpoints != null
-                && s.Endpoints.EndpointList.Any(e => e.Id == endpointId)))
+            if (request.EndpointName is { } endpointName)
             {
-                return McpResult<MutationResultData>.Failure(
-                    "not_found",
-                    $"Endpoint '{endpointId}' not found.",
-                    new NotFoundErrorDetails
-                    {
-                        EntityType = GraphEntityType.Endpoint,
-                        EntityId = endpointId
-                    });
+                var endpointServiceName = request.RelatedServiceName ?? request.ServiceName;
+                var endpointExists = context.Services.Any(s =>
+                    PathIdentity.NamesEqual(s.Name, endpointServiceName)
+                    && s.Endpoints != null
+                    && s.Endpoints.EndpointList.Any(e => PathIdentity.NamesEqual(e.Name, endpointName)));
+                if (!endpointExists)
+                {
+                    return McpResult<MutationResultData>.Failure(
+                        "not_found",
+                        $"Endpoint '{endpointName}' not found in service '{endpointServiceName}'.",
+                        new NotFoundErrorDetails
+                        {
+                            EntityType = GraphEntityType.Endpoint,
+                            EntityName = endpointName,
+                            ServiceName = endpointServiceName
+                        });
+                }
             }
 
-            if (request.ServiceId is { } relatedServiceId && !context.Services.Any(s => s.Id == relatedServiceId))
+            if (request.RelatedServiceName is { } relatedServiceName
+                && !context.Services.Any(s => PathIdentity.NamesEqual(s.Name, relatedServiceName)))
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
-                    $"Service '{relatedServiceId}' not found.",
+                    $"Service '{relatedServiceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = relatedServiceId
+                        EntityName = relatedServiceName
                     });
             }
 
@@ -254,15 +286,15 @@ public static class UpsertRelation
             {
                 Name = request.StepName,
                 Description = request.StepDescription,
-                ServiceId = request.ServiceId,
-                EndpointId = request.EndpointId,
+                ServiceName = request.RelatedServiceName,
+                EndpointName = request.EndpointName,
                 RelativeCodePath = request.RelativeCodePath
             };
 
             step.Name = request.StepName;
             step.Description = request.StepDescription;
-            step.ServiceId = request.ServiceId;
-            step.EndpointId = request.EndpointId;
+            step.ServiceName = request.RelatedServiceName;
+            step.EndpointName = request.EndpointName;
             step.RelativeCodePath = request.RelativeCodePath;
 
             if (action == "created")
@@ -276,7 +308,8 @@ public static class UpsertRelation
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.UseCase,
-                EntityId = useCase.Id,
+                EntityName = useCase.Name,
+                ServiceName = request.ServiceName,
                 Action = action,
                 Message = $"Relation step '{step.Name}' {action}."
             });
@@ -286,7 +319,7 @@ public static class UpsertRelation
 
 public static class RemoveEntity
 {
-    public sealed record Command(Guid EntityId, GraphEntityType EntityType) : ICommand<McpResult<MutationResultData>>;
+    public sealed record Command(string EntityName, GraphEntityType EntityType, string? ServiceName) : ICommand<McpResult<MutationResultData>>;
 
     public sealed class Handler(GraphifyContext context) : ICommandHandler<Command, McpResult<MutationResultData>>
     {
@@ -295,9 +328,9 @@ public static class RemoveEntity
             await context.EnsureDataLoadedAsync(cancellationToken);
             return command.EntityType switch
             {
-                GraphEntityType.Service => await RemoveService(command.EntityId, cancellationToken),
-                GraphEntityType.Endpoint => await RemoveEndpoint(command.EntityId, cancellationToken),
-                GraphEntityType.UseCase => await RemoveUseCase(command.EntityId, cancellationToken),
+                GraphEntityType.Service => await RemoveService(command.EntityName, cancellationToken),
+                GraphEntityType.Endpoint => await RemoveEndpoint(command.EntityName, command.ServiceName, cancellationToken),
+                GraphEntityType.UseCase => await RemoveUseCase(command.EntityName, command.ServiceName, cancellationToken),
                 _ => McpResult<MutationResultData>.Failure(
                     "validation_error",
                     "Unsupported entity type.",
@@ -309,31 +342,31 @@ public static class RemoveEntity
             };
         }
 
-        private async Task<McpResult<MutationResultData>> RemoveService(Guid serviceId, CancellationToken cancellationToken)
+        private async Task<McpResult<MutationResultData>> RemoveService(string serviceName, CancellationToken cancellationToken)
         {
             var services = await context.Services.ToArrayAsync(cancellationToken);
-            var service = services.FirstOrDefault(s => s.Id == serviceId);
+            var service = services.FirstOrDefault(s => PathIdentity.NamesEqual(s.Name, serviceName));
             if (service is null)
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
-                    $"Service '{serviceId}' not found.",
+                    $"Service '{serviceName}' not found.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = serviceId
+                        EntityName = serviceName
                     });
             }
 
-            var relatedUseCaseIds = services
-                .Where(s => s.Id != serviceId)
-                .SelectMany(s => s.UseCases)
-                .Where(uc => uc.Steps.Any(step => step.ServiceId == serviceId))
-                .Select(uc => uc.Id)
-                .Distinct()
+            var blocking = services
+                .Where(s => !PathIdentity.NamesEqual(s.Name, serviceName))
+                .SelectMany(s => s.UseCases.Select(uc => (Service: s, UseCase: uc)))
+                .Where(x => x.UseCase.Steps.Any(step => PathIdentity.NamesEqual(step.ServiceName, serviceName)))
+                .Select(x => new UseCaseRef { ServiceName = x.Service.Name, UseCaseName = x.UseCase.Name })
+                .DistinctBy(x => (x.ServiceName, x.UseCaseName))
                 .ToArray();
 
-            if (relatedUseCaseIds.Length > 0)
+            if (blocking.Length > 0)
             {
                 return McpResult<MutationResultData>.Failure(
                     "conflict",
@@ -341,8 +374,8 @@ public static class RemoveEntity
                     new ConflictErrorDetails
                     {
                         EntityType = GraphEntityType.Service,
-                        EntityId = serviceId,
-                        BlockingUseCaseIds = relatedUseCaseIds
+                        EntityName = serviceName,
+                        BlockingUseCases = blocking
                     });
             }
 
@@ -351,36 +384,58 @@ public static class RemoveEntity
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.Service,
-                EntityId = serviceId,
+                EntityName = serviceName,
+                ServiceName = serviceName,
                 Action = "removed"
             });
         }
 
-        private async Task<McpResult<MutationResultData>> RemoveEndpoint(Guid endpointId, CancellationToken cancellationToken)
+        private async Task<McpResult<MutationResultData>> RemoveEndpoint(string endpointName, string? serviceName, CancellationToken cancellationToken)
         {
-            var services = await context.Services.ToArrayAsync(cancellationToken);
-            var endpoint = services
-                .SelectMany(s => s.Endpoints?.EndpointList ?? [])
-                .FirstOrDefault(e => e.Id == endpointId);
-            if (endpoint is null)
+            if (string.IsNullOrWhiteSpace(serviceName))
             {
                 return McpResult<MutationResultData>.Failure(
-                    "not_found",
-                    $"Endpoint '{endpointId}' not found.",
-                    new NotFoundErrorDetails
+                    "validation_error",
+                    "serviceName is required when removing an endpoint.",
+                    new ValidationErrorDetails
                     {
-                        EntityType = GraphEntityType.Endpoint,
-                        EntityId = endpointId
+                        Field = nameof(serviceName),
+                        Reason = "Endpoint identity is scoped by service."
                     });
             }
 
-            var relatedUseCaseIds = services
-                .SelectMany(s => s.UseCases)
-                .Where(uc => uc.InitiatingEndpointId == endpointId || uc.Steps.Any(step => step.EndpointId == endpointId))
-                .Select(uc => uc.Id)
-                .Distinct()
+            var services = await context.Services.ToArrayAsync(cancellationToken);
+            var service = services.FirstOrDefault(s => PathIdentity.NamesEqual(s.Name, serviceName));
+            var endpoint = service?.Endpoints?.EndpointList
+                .FirstOrDefault(e => PathIdentity.NamesEqual(e.Name, endpointName));
+            if (service is null || endpoint is null)
+            {
+                return McpResult<MutationResultData>.Failure(
+                    "not_found",
+                    $"Endpoint '{endpointName}' not found in service '{serviceName}'.",
+                    new NotFoundErrorDetails
+                    {
+                        EntityType = GraphEntityType.Endpoint,
+                        EntityName = endpointName,
+                        ServiceName = serviceName
+                    });
+            }
+
+            var blocking = services
+                .SelectMany(s => s.UseCases.Select(uc => (Service: s, UseCase: uc)))
+                .Where(x =>
+                    (PathIdentity.NamesEqual(x.Service.Name, serviceName)
+                     && PathIdentity.NamesEqual(x.UseCase.InitiatingEndpointName, endpointName))
+                    || x.UseCase.Steps.Any(step =>
+                        PathIdentity.NamesEqual(step.EndpointName, endpointName)
+                        && (step.ServiceName is null
+                            ? PathIdentity.NamesEqual(x.Service.Name, serviceName)
+                            : PathIdentity.NamesEqual(step.ServiceName, serviceName))))
+                .Select(x => new UseCaseRef { ServiceName = x.Service.Name, UseCaseName = x.UseCase.Name })
+                .DistinctBy(x => (x.ServiceName, x.UseCaseName))
                 .ToArray();
-            if (relatedUseCaseIds.Length > 0)
+
+            if (blocking.Length > 0)
             {
                 return McpResult<MutationResultData>.Failure(
                     "conflict",
@@ -388,8 +443,9 @@ public static class RemoveEntity
                     new ConflictErrorDetails
                     {
                         EntityType = GraphEntityType.Endpoint,
-                        EntityId = endpointId,
-                        BlockingUseCaseIds = relatedUseCaseIds
+                        EntityName = endpointName,
+                        ServiceName = serviceName,
+                        BlockingUseCases = blocking
                     });
             }
 
@@ -398,24 +454,41 @@ public static class RemoveEntity
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.Endpoint,
-                EntityId = endpointId,
+                EntityName = endpointName,
+                ServiceName = serviceName,
                 Action = "removed"
             });
         }
 
-        private async Task<McpResult<MutationResultData>> RemoveUseCase(Guid useCaseId, CancellationToken cancellationToken)
+        private async Task<McpResult<MutationResultData>> RemoveUseCase(string useCaseName, string? serviceName, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(serviceName))
+            {
+                return McpResult<MutationResultData>.Failure(
+                    "validation_error",
+                    "serviceName is required when removing a use case.",
+                    new ValidationErrorDetails
+                    {
+                        Field = nameof(serviceName),
+                        Reason = "Use case identity is scoped by service."
+                    });
+            }
+
             var services = await context.Services.ToArrayAsync(cancellationToken);
-            var useCase = services.SelectMany(s => s.UseCases).FirstOrDefault(uc => uc.Id == useCaseId);
+            var useCase = services
+                .Where(s => PathIdentity.NamesEqual(s.Name, serviceName))
+                .SelectMany(s => s.UseCases)
+                .FirstOrDefault(uc => PathIdentity.NamesEqual(uc.Name, useCaseName));
             if (useCase is null)
             {
                 return McpResult<MutationResultData>.Failure(
                     "not_found",
-                    $"Use case '{useCaseId}' not found.",
+                    $"Use case '{useCaseName}' not found in service '{serviceName}'.",
                     new NotFoundErrorDetails
                     {
                         EntityType = GraphEntityType.UseCase,
-                        EntityId = useCaseId
+                        EntityName = useCaseName,
+                        ServiceName = serviceName
                     });
             }
 
@@ -424,7 +497,8 @@ public static class RemoveEntity
             return McpResult<MutationResultData>.Success(new MutationResultData
             {
                 EntityType = GraphEntityType.UseCase,
-                EntityId = useCaseId,
+                EntityName = useCaseName,
+                ServiceName = serviceName,
                 Action = "removed"
             });
         }

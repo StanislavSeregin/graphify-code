@@ -68,7 +68,9 @@ public class McpToolContractsTests
         response.Error.Should().BeNull();
         response.Data.Should().NotBeNull();
         response.Data!.EntityType.Should().Be(GraphEntityType.Service);
+        response.Data.EntityName.Should().Be("UserService");
         response.Data.Action.Should().Be("created");
+        Directory.Exists(Path.Combine(_dataPath, "UserService")).Should().BeTrue();
     }
 
     [Test]
@@ -94,12 +96,12 @@ public class McpToolContractsTests
             },
             CancellationToken.None);
 
-        var serviceId = serviceResult.Data!.EntityId;
+        var serviceName = serviceResult.Data!.EntityName;
 
         var endpointResult = await _tool.UpsertEndpoint(
             new UpsertEndpointRequest
             {
-                ServiceId = serviceId,
+                ServiceName = serviceName,
                 Name = "POST /payments",
                 Description = "Create payment",
                 Type = "http",
@@ -110,27 +112,28 @@ public class McpToolContractsTests
         var useCaseResult = await _tool.UpsertUseCase(
             new UpsertUseCaseRequest
             {
-                ServiceId = serviceId,
+                ServiceName = serviceName,
                 Name = "Process Payment",
                 Description = "Process payment end-to-end",
-                InitiatingEndpointId = endpointResult.Data!.EntityId
+                InitiatingEndpointName = endpointResult.Data!.EntityName
             },
             CancellationToken.None);
 
         var relationResult = await _tool.UpsertRelation(
             new UpsertRelationRequest
             {
-                UseCaseId = useCaseResult.Data!.EntityId,
+                ServiceName = serviceName,
+                UseCaseName = useCaseResult.Data!.EntityName,
                 StepName = "Call gateway",
                 StepDescription = "Forward request to payment gateway",
-                ServiceId = serviceId,
-                EndpointId = endpointResult.Data.EntityId,
+                RelatedServiceName = serviceName,
+                EndpointName = endpointResult.Data.EntityName,
                 RelativeCodePath = "src/services/billing/gateway.ts"
             },
             CancellationToken.None);
 
-        var getServiceResult = await _tool.GetService(serviceId, includeEndpoints: true, includeUseCases: true, CancellationToken.None);
-        var getUseCaseResult = await _tool.GetUseCase(useCaseResult.Data.EntityId, CancellationToken.None);
+        var getServiceResult = await _tool.GetService(serviceName, includeEndpoints: true, includeUseCases: true, CancellationToken.None);
+        var getUseCaseResult = await _tool.GetUseCase(serviceName, useCaseResult.Data.EntityName, CancellationToken.None);
         var listResult = await _tool.ListServices(CancellationToken.None);
         var searchResult = await _tool.SearchGraph("payment", 20, CancellationToken.None);
 
@@ -141,6 +144,7 @@ public class McpToolContractsTests
         listResult.Ok.Should().BeTrue();
         searchResult.Ok.Should().BeTrue();
         searchResult.Data!.Matches.Should().NotBeEmpty();
+        File.Exists(Path.Combine(_dataPath, "BillingService", "usecases", "Process Payment.md")).Should().BeTrue();
     }
 
     [Test]
@@ -156,7 +160,7 @@ public class McpToolContractsTests
         var endpointB = await _tool.UpsertEndpoint(
             new UpsertEndpointRequest
             {
-                ServiceId = serviceB.Data!.EntityId,
+                ServiceName = serviceB.Data!.EntityName,
                 Name = "GET /b",
                 Description = "endpoint b",
                 Type = "http"
@@ -166,24 +170,25 @@ public class McpToolContractsTests
         var useCaseB = await _tool.UpsertUseCase(
             new UpsertUseCaseRequest
             {
-                ServiceId = serviceB.Data!.EntityId,
+                ServiceName = serviceB.Data!.EntityName,
                 Name = "Cross call",
                 Description = "Cross-service use case",
-                InitiatingEndpointId = endpointB.Data!.EntityId
+                InitiatingEndpointName = endpointB.Data!.EntityName
             },
             CancellationToken.None);
 
         await _tool.UpsertRelation(
             new UpsertRelationRequest
             {
-                UseCaseId = useCaseB.Data!.EntityId,
+                ServiceName = serviceB.Data.EntityName,
+                UseCaseName = useCaseB.Data!.EntityName,
                 StepName = "Use service A",
                 StepDescription = "Depends on service A",
-                ServiceId = serviceA.Data.EntityId
+                RelatedServiceName = serviceA.Data!.EntityName
             },
             CancellationToken.None);
 
-        var removeResult = await _tool.RemoveEntity(serviceA.Data.EntityId, GraphEntityType.Service, CancellationToken.None);
+        var removeResult = await _tool.RemoveEntity(serviceA.Data.EntityName, GraphEntityType.Service, serviceName: null, CancellationToken.None);
 
         removeResult.Ok.Should().BeFalse();
         removeResult.Error!.Code.Should().Be("conflict");
@@ -200,7 +205,7 @@ public class McpToolContractsTests
         var endpoint = await _tool.UpsertEndpoint(
             new UpsertEndpointRequest
             {
-                ServiceId = service.Data!.EntityId,
+                ServiceName = service.Data!.EntityName,
                 Name = "GET /orders",
                 Description = "Get orders",
                 Type = "http"
@@ -210,15 +215,15 @@ public class McpToolContractsTests
         await _tool.UpsertUseCase(
             new UpsertUseCaseRequest
             {
-                ServiceId = service.Data.EntityId,
+                ServiceName = service.Data.EntityName,
                 Name = "List orders",
                 Description = "List flow",
-                InitiatingEndpointId = endpoint.Data!.EntityId
+                InitiatingEndpointName = endpoint.Data!.EntityName
             },
             CancellationToken.None);
 
-        var endpointsResult = await _tool.ListEndpoints(service.Data.EntityId, CancellationToken.None);
-        var useCasesResult = await _tool.ListUseCases(service.Data.EntityId, CancellationToken.None);
+        var endpointsResult = await _tool.ListEndpoints(service.Data.EntityName, CancellationToken.None);
+        var useCasesResult = await _tool.ListUseCases(service.Data.EntityName, CancellationToken.None);
 
         endpointsResult.Ok.Should().BeTrue();
         endpointsResult.Data!.Endpoints.Should().ContainSingle();
@@ -240,14 +245,14 @@ public class McpToolContractsTests
                 [
                     new UpsertEndpointRequest
                     {
-                        ServiceId = service.Data!.EntityId,
+                        ServiceName = service.Data!.EntityName,
                         Name = "GET /billing",
                         Description = "Billing endpoint",
                         Type = "http"
                     },
                     new UpsertEndpointRequest
                     {
-                        ServiceId = Guid.NewGuid(),
+                        ServiceName = "missing-service",
                         Name = "GET /invalid",
                         Description = "Invalid endpoint",
                         Type = "http"
@@ -272,7 +277,8 @@ public class McpToolContractsTests
                 [
                     new UpsertRelationRequest
                     {
-                        UseCaseId = Guid.NewGuid(),
+                        ServiceName = "missing",
+                        UseCaseName = "missing",
                         StepName = "Unknown",
                         StepDescription = "Should fail"
                     }

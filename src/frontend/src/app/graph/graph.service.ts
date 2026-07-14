@@ -10,7 +10,6 @@ import * as d3 from 'd3';
 // ============================================================================
 
 export type Service = {
-  id: string;
   name: string;
   description: string;
   lastAnalyzedAt: string;
@@ -18,7 +17,6 @@ export type Service = {
 };
 
 export type Endpoint = {
-  id: string;
   name: string;
   description: string;
   type: string;
@@ -27,22 +25,21 @@ export type Endpoint = {
 };
 
 export type Relations = {
-  targetEndpointIds: string[];
+  targetEndpointNames: string[];
 };
 
 export type UseCaseStep = {
   name: string;
   description: string;
-  serviceId: string | null;
-  endpointId: string | null;
+  serviceName: string | null;
+  endpointName: string | null;
   relativeCodePath: string | null;
 };
 
 export type UseCase = {
-  id: string;
   name: string;
   description: string;
-  initiatingEndpointId: string;
+  initiatingEndpointName: string;
   lastAnalyzedAt: string;
   steps: UseCaseStep[];
 };
@@ -86,9 +83,9 @@ export interface ZoomState {
 
 export interface ZoomRequest {
   scope: 'main' | 'nested';
-  targetId?: string; // Node ID to focus on, or undefined for reset
-  transform?: d3.ZoomTransform; // Explicit transform, or computed automatically
-  duration?: number; // Animation duration in ms (default: 750)
+  targetId?: string;
+  transform?: d3.ZoomTransform;
+  duration?: number;
 }
 
 export interface SidebarRequest<T> {
@@ -99,67 +96,49 @@ export interface SidebarRequest<T> {
 export type EndpointSidebarRequest = SidebarRequest<EndpointSidebarData>;
 export type UseCaseSidebarRequest = SidebarRequest<UseCaseSidebarData>;
 
+export function endpointRefKey(serviceName: string, endpointName: string): string {
+  return `${serviceName}\0${endpointName}`;
+}
+
+export function useCaseRefKey(serviceName: string, useCaseName: string): string {
+  return `${serviceName}\0${useCaseName}`;
+}
+
 // ============================================================================
 // GraphService
 // ============================================================================
 
-/**
- * Central service for managing graph data, visualization state, and UI interactions.
- *
- * Responsibilities:
- * - Loading and caching graph data from API
- * - Managing zoom/pan state for main and nested graphs
- * - Coordinating sidebar interactions (endpoint and use case)
- * - Handling keyboard navigation (Escape key logic)
- */
 @Injectable({
   providedIn: 'root'
 })
 export class GraphService {
   private readonly apiUrl = environment.apiUrl;
-  /** Hysteresis avoids flicker when zoom hovers near the threshold. */
   private readonly SERVICE_CARD_FULL_THRESHOLD_ON = 0.95;
   private readonly SERVICE_CARD_FULL_THRESHOLD_OFF = 0.82;
   private currentDisplayMode: DisplayMode = 'compact';
 
-  // ============================================================================
-  // Private State
-  // ============================================================================
-
-  // Data state
   private graphDataSubject = new BehaviorSubject<FullGraph | null>(null);
   private isBusySubject = new BehaviorSubject<boolean>(false);
   private errorSubject = new BehaviorSubject<string | null>(null);
 
-  // Zoom state (for main graph only - used for display mode calculation)
   private zoomStateSubject = new BehaviorSubject<ZoomState>({
     transform: d3.zoomIdentity,
     scale: 1
   });
 
-  // Zoom event stream
   private zoomRequestSubject = new Subject<ZoomRequest>();
-
-  // Sidebar event streams
   private endpointSidebarRequestSubject = new Subject<EndpointSidebarRequest>();
   private useCaseSidebarRequestSubject = new Subject<UseCaseSidebarRequest>();
 
-  // Escape key state tracking
   private escapeState = {
     nestedGraphChanged: false,
     pendingNestedReset: false
   };
 
-  // ============================================================================
-  // Public Observables
-  // ============================================================================
-
-  // Data observables
   public graphData$: Observable<FullGraph | null> = this.graphDataSubject.asObservable();
   public isBusy$: Observable<boolean> = this.isBusySubject.asObservable();
   public error$: Observable<string | null> = this.errorSubject.asObservable();
 
-  // Zoom state observables (main graph only)
   public zoomState$: Observable<ZoomState> = this.zoomStateSubject.asObservable();
   public zoomScale$: Observable<number> = this.zoomState$.pipe(
     map(state => state.scale),
@@ -171,13 +150,11 @@ export class GraphService {
     distinctUntilChanged()
   );
 
-  // Display mode observables (hysteresis)
   public displayMode$: Observable<DisplayMode> = this.zoomState$.pipe(
     map(state => this.resolveDisplayMode(state.scale)),
     distinctUntilChanged()
   );
 
-  // Zoom event streams (filtered by scope)
   public mainGraphZoom$: Observable<ZoomRequest> = this.zoomRequestSubject.pipe(
     filter(req => req.scope === 'main')
   );
@@ -186,19 +163,11 @@ export class GraphService {
     filter(req => req.scope === 'nested')
   );
 
-  // Sidebar event streams
   public endpointSidebarRequest$: Observable<EndpointSidebarRequest> = this.endpointSidebarRequestSubject.asObservable();
   public useCaseSidebarRequest$: Observable<UseCaseSidebarRequest> = this.useCaseSidebarRequestSubject.asObservable();
 
-  // ============================================================================
-  // Constructor
-  // ============================================================================
-
   constructor(private http: HttpClient) {}
 
-  // ============================================================================
-  // Data Methods
-  // ============================================================================
   public async init(): Promise<void> {
     this.isBusySubject.next(true);
     this.errorSubject.next(null);
@@ -224,9 +193,6 @@ export class GraphService {
     await this.init();
   }
 
-  // ============================================================================
-  // Zoom Methods
-  // ============================================================================
   public updateZoom(transform: d3.ZoomTransform): void {
     this.zoomStateSubject.next({
       transform,
@@ -238,98 +204,62 @@ export class GraphService {
     return this.zoomStateSubject.value.scale;
   }
 
-  /**
-   * Request a zoom operation (focus on node or reset)
-   * Single entry point for all zoom/pan operations
-   */
   public requestZoom(request: ZoomRequest): void {
     this.zoomRequestSubject.next(request);
   }
 
-  // ============================================================================
-  // Escape Key Handling
-  // ============================================================================
-
-  /**
-   * Mark nested graph as changed (zoomed/panned)
-   */
   public markNestedGraphChanged(): void {
     this.escapeState.nestedGraphChanged = true;
   }
 
-  /**
-   * Clear pending nested reset flag when user focuses on a new node
-   */
   public clearPendingNestedReset(): void {
     this.escapeState.pendingNestedReset = false;
   }
 
-  /**
-   * Reset escape state flags
-   */
   private resetEscapeState(): void {
     this.escapeState.nestedGraphChanged = false;
     this.escapeState.pendingNestedReset = false;
   }
 
-  /**
-   * Handle Esc key press
-   * Implements smart reset logic:
-   * - If zoomed in (scale >= 1.0):
-   *   - First Esc: reset nested graph (if changed)
-   *   - Second Esc: reset main graph to overview
-   * - If at overview: reset main graph position/zoom
-   */
   public handleEscapeKey(): void {
     const { scale } = this.zoomStateSubject.value;
     const isZoomedIn = scale >= this.SERVICE_CARD_FULL_THRESHOLD_ON;
 
     if (!isZoomedIn) {
-      // At overview level: reset main graph
       this.requestZoom({ scope: 'main', duration: 750 });
       this.resetEscapeState();
       return;
     }
 
-    // Zoomed in on service card
     const { nestedGraphChanged, pendingNestedReset } = this.escapeState;
 
     if (nestedGraphChanged && !pendingNestedReset) {
-      // First Esc: reset nested graph
       this.requestZoom({ scope: 'nested', duration: 750 });
       this.escapeState.pendingNestedReset = true;
     } else {
-      // Second Esc or nested wasn't changed: zoom out to overview
       this.requestZoom({ scope: 'main', duration: 750 });
       this.resetEscapeState();
     }
   }
 
-  // ============================================================================
-  // Sidebar Methods
-  // ============================================================================
-
-  /**
-   * Open endpoint sidebar with endpoint details
-   */
   public showEndpointDetails(endpoint: Endpoint, service: ServiceData, fullGraph: FullGraph): void {
-    const relatedServices = this.findRelatedServicesForEndpoint(endpoint.id, fullGraph);
+    const relatedServices = this.findRelatedServicesForEndpoint(service.service.name, endpoint.name, fullGraph);
 
-    // Find use cases where this endpoint is involved (within the same service)
     const useCases = service.useCases.filter(uc =>
-      uc.initiatingEndpointId === endpoint.id ||
-      uc.steps.some(step => step.endpointId === endpoint.id)
+      uc.initiatingEndpointName === endpoint.name ||
+      uc.steps.some(step =>
+        step.endpointName === endpoint.name
+        && (step.serviceName === null || step.serviceName === service.service.name))
     );
 
-    // Find use cases from other services that use this endpoint
     const externalUseCases: Array<{ useCase: UseCase; service: ServiceData }> = [];
     fullGraph.services.forEach(s => {
-      // Skip the current service to avoid duplicates
-      if (s.service.id === service.service.id) return;
+      if (s.service.name === service.service.name) return;
 
       s.useCases.forEach(uc => {
-        // Check if this use case uses the endpoint in any step
-        const usesEndpoint = uc.steps.some(step => step.endpointId === endpoint.id);
+        const usesEndpoint = uc.steps.some(step =>
+          step.endpointName === endpoint.name
+          && (step.serviceName === null ? false : step.serviceName === service.service.name));
         if (usesEndpoint) {
           externalUseCases.push({ useCase: uc, service: s });
         }
@@ -342,9 +272,6 @@ export class GraphService {
     });
   }
 
-  /**
-   * Open use case sidebar with use case details
-   */
   public showUseCaseDetails(useCase: UseCase, service: ServiceData, fullGraph: FullGraph, stepIndex?: number): void {
     this.useCaseSidebarRequestSubject.next({
       action: 'open',
@@ -352,25 +279,26 @@ export class GraphService {
     });
   }
 
-  /**
-   * Services that call this endpoint (from relations API and use-case steps).
-   */
-  public findRelatedServicesForEndpoint(endpointId: string, fullGraph: FullGraph): ServiceData[] {
-    const relatedIds = new Set<string>();
+  public findRelatedServicesForEndpoint(serviceName: string, endpointName: string, fullGraph: FullGraph): ServiceData[] {
+    const relatedNames = new Set<string>();
 
     fullGraph.services.forEach(s => {
-      if (s.relations.targetEndpointIds.includes(endpointId)) {
-        relatedIds.add(s.service.id);
+      if (s.relations.targetEndpointNames.includes(endpointName)) {
+        relatedNames.add(s.service.name);
       }
       s.useCases.forEach(uc => {
-        const callsEndpoint = uc.steps.some(step => step.endpointId === endpointId);
+        const callsEndpoint = uc.steps.some(step =>
+          step.endpointName === endpointName
+          && (step.serviceName === null
+            ? s.service.name === serviceName
+            : step.serviceName === serviceName));
         if (callsEndpoint) {
-          relatedIds.add(s.service.id);
+          relatedNames.add(s.service.name);
         }
       });
     });
 
-    return fullGraph.services.filter(s => relatedIds.has(s.service.id));
+    return fullGraph.services.filter(s => relatedNames.has(s.service.name));
   }
 
   private resolveDisplayMode(scale: number): DisplayMode {
@@ -382,96 +310,66 @@ export class GraphService {
     return this.currentDisplayMode;
   }
 
-  /**
-   * Focus on service by ID (main graph)
-   */
-  public focusOnService(serviceId: string): void {
+  public focusOnService(serviceName: string): void {
     this.requestZoom({
       scope: 'main',
-      targetId: serviceId,
+      targetId: serviceName,
       duration: 750
     });
   }
 
-  /**
-   * Focus on endpoint in nested graph
-   */
-  public focusOnEndpoint(endpointId: string): void {
+  public focusOnEndpoint(endpointName: string): void {
     this.requestZoom({
       scope: 'nested',
-      targetId: endpointId,
+      targetId: endpointName,
       duration: 750
     });
   }
 
-  /**
-   * Handle use case step click
-   *
-   * Invariants:
-   * 1. Step references endpoint -> activate that endpoint
-   * 2. Step references parent service (no endpoint) -> activate parent's initiating endpoint
-   * 3. Step references other service (no endpoint) -> activate that service
-   */
   public handleUseCaseStepClick(step: UseCaseStep, useCase: UseCase, service: ServiceData, fullGraph: FullGraph): void {
-    const parentServiceId = service.service.id;
-    const initiatingEndpointId = useCase.initiatingEndpointId;
+    const parentServiceName = service.service.name;
+    const initiatingEndpointName = useCase.initiatingEndpointName;
 
-    // Invariant 1: Step references endpoint -> activate that endpoint
-    if (step.endpointId) {
-      this.activateStepEndpoint(step.endpointId, fullGraph);
+    if (step.endpointName) {
+      const endpointServiceName = step.serviceName ?? parentServiceName;
+      this.activateStepEndpoint(endpointServiceName, step.endpointName, fullGraph);
       return;
     }
 
-    // Invariant 2: Step references parent service -> activate parent's initiating endpoint
-    if (step.serviceId === parentServiceId) {
-      this.activateParentEndpoint(initiatingEndpointId, parentServiceId, service, fullGraph);
+    if (step.serviceName === parentServiceName) {
+      this.activateParentEndpoint(initiatingEndpointName, parentServiceName, service, fullGraph);
       return;
     }
 
-    // Invariant 3: Step references other service -> activate that service
-    if (step.serviceId) {
-      this.activateService(step.serviceId);
+    if (step.serviceName) {
+      this.activateService(step.serviceName);
       return;
     }
 
-    // Fallback: No references -> activate parent's initiating endpoint
-    this.activateParentEndpoint(initiatingEndpointId, parentServiceId, service, fullGraph);
+    this.activateParentEndpoint(initiatingEndpointName, parentServiceName, service, fullGraph);
   }
 
-  /**
-   * Activate a specific endpoint referenced by a step
-   */
-  private activateStepEndpoint(endpointId: string, fullGraph: FullGraph): void {
-    for (const serviceData of fullGraph.services) {
-      const endpoint = serviceData.endpoint.find(ep => ep.id === endpointId);
-      if (endpoint) {
-        // Always focus the service that owns the endpoint (e.g. when returning
-        // from a step on another service, main graph may still be zoomed there).
-        this.focusOnService(serviceData.service.id);
-        this.focusOnEndpoint(endpoint.id);
-        this.showEndpointDetails(endpoint, serviceData, fullGraph);
-        break;
-      }
+  private activateStepEndpoint(serviceName: string, endpointName: string, fullGraph: FullGraph): void {
+    const serviceData = fullGraph.services.find(s => s.service.name === serviceName);
+    const endpoint = serviceData?.endpoint.find(ep => ep.name === endpointName);
+    if (serviceData && endpoint) {
+      this.focusOnService(serviceData.service.name);
+      this.focusOnEndpoint(endpoint.name);
+      this.showEndpointDetails(endpoint, serviceData, fullGraph);
     }
   }
 
-  /**
-   * Activate parent service's initiating endpoint
-   */
-  private activateParentEndpoint(initiatingEndpointId: string, parentServiceId: string, service: ServiceData, fullGraph: FullGraph): void {
-    const initiatingEndpoint = service.endpoint.find(ep => ep.id === initiatingEndpointId);
+  private activateParentEndpoint(initiatingEndpointName: string, parentServiceName: string, service: ServiceData, fullGraph: FullGraph): void {
+    const initiatingEndpoint = service.endpoint.find(ep => ep.name === initiatingEndpointName);
     if (initiatingEndpoint) {
-      this.focusOnService(parentServiceId);
-      this.focusOnEndpoint(initiatingEndpoint.id);
+      this.focusOnService(parentServiceName);
+      this.focusOnEndpoint(initiatingEndpoint.name);
       this.showEndpointDetails(initiatingEndpoint, service, fullGraph);
     }
   }
 
-  /**
-   * Activate a service (without focusing on a specific endpoint)
-   */
-  private activateService(serviceId: string): void {
-    this.focusOnService(serviceId);
+  private activateService(serviceName: string): void {
+    this.focusOnService(serviceName);
     this.closeEndpointSidebar();
   }
 

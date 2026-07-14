@@ -1,6 +1,5 @@
-﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Entities;
 using GraphifyCode.Markdown;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -17,13 +16,12 @@ public partial class UseCasesDetails
         {
             UseCases = [.. useCases.Select(u => new DetailedUseCase()
             {
-                Id = u.Id,
                 Name = u.Name,
                 Steps = [.. u.Steps.Select(s => new DetailedUseCaseStep() {
                     Name = s.Name,
                     Description = s.Description,
-                    ServiceId = s.ServiceId,
-                    EndpointId = s.EndpointId,
+                    ServiceName = s.ServiceName,
+                    EndpointName = s.EndpointName,
                     RelativeCodePath = s.RelativeCodePath
                 })]
             })]
@@ -34,8 +32,6 @@ public partial class UseCasesDetails
 [MarkdownSerializable]
 public partial class DetailedUseCase
 {
-    public Guid Id { get; set; }
-
     [MarkdownHeader]
     public required string Name { get; set; }
 
@@ -50,9 +46,9 @@ public partial class DetailedUseCaseStep
 
     public required string Description { get; set; }
 
-    public Guid? ServiceId { get; set; }
+    public string? ServiceName { get; set; }
 
-    public Guid? EndpointId { get; set; }
+    public string? EndpointName { get; set; }
 
     public string? RelativeCodePath { get; set; }
 }

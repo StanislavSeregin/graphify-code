@@ -131,7 +131,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   selectService(serviceId: string, focus = false): void {
-    if (!this.viewModel?.servicesById.has(serviceId)) return;
+    if (!this.viewModel?.servicesByName.has(serviceId)) return;
     this.selectedServiceId = serviceId;
     this.expandedEndpointId = null;
     this.expandedUseCaseId = null;
@@ -145,20 +145,21 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  expandUseCase(useCaseId: string): void {
-    const useCase = this.viewModel?.useCasesById.get(useCaseId);
+  expandUseCase(serviceName: string, useCaseName: string): void {
+    const key = `${serviceName}\0${useCaseName}`;
+    const useCase = this.viewModel?.useCasesByKey.get(key);
     if (!useCase) return;
 
-    if (this.selectedServiceId !== useCase.service.service.id) {
-      this.selectService(useCase.service.service.id, true);
+    if (this.selectedServiceId !== useCase.service.service.name) {
+      this.selectService(useCase.service.service.name, true);
     }
-    this.expandedUseCaseId = useCaseId;
+    this.expandedUseCaseId = useCaseName;
     this.openFlowOverlay(useCase.useCase, 0);
   }
 
   onUseCaseOpened(useCase: UseCase): void {
-    this.expandedUseCaseId = useCase.id;
-    if (this.activeFlowModel?.useCaseId === useCase.id) {
+    this.expandedUseCaseId = useCase.name;
+    if (this.activeFlowModel?.useCaseId === useCase.name) {
       this.flowRenderer?.updateActiveState(this.activeFlowSelection);
       return;
     }
@@ -168,7 +169,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   openFlowOverlay(useCase: UseCase, stepIndex: number): void {
     if (!this.viewModel || !this.selectedService) return;
 
-    const existingModel = this.activeFlowModel?.useCaseId === useCase.id
+    const existingModel = this.activeFlowModel?.useCaseId === useCase.name
       ? this.activeFlowModel
       : null;
     if (existingModel) {
@@ -220,11 +221,14 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   activateFlowEndpoint(serviceId: string, endpointKey: string): void {
-    if (!this.viewModel?.servicesById.has(serviceId)) return;
+    if (!this.viewModel?.servicesByName.has(serviceId)) return;
 
     this.selectedServiceId = serviceId;
     this.expandedUseCaseId = null;
-    this.expandedEndpointId = this.viewModel.endpointsById.has(endpointKey) ? endpointKey : null;
+    this.expandedEndpointId = this.viewModel.servicesByName.get(serviceId)
+      ?.serviceData.endpoint.some(ep => ep.name === endpointKey)
+      ? endpointKey
+      : null;
     this.activeFlowServiceId = serviceId;
     this.activeFlowEndpointKey = endpointKey;
     this.activeFlowStepIndex = null;
@@ -236,7 +240,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   activateFlowService(serviceId: string): void {
-    if (!this.viewModel?.servicesById.has(serviceId)) return;
+    if (!this.viewModel?.servicesByName.has(serviceId)) return;
 
     this.selectedServiceId = serviceId;
     this.expandedEndpointId = null;
@@ -284,7 +288,7 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get selectedService(): GraphServiceNode | null {
     if (!this.selectedServiceId || !this.viewModel) return null;
-    return this.viewModel.servicesById.get(this.selectedServiceId) ?? null;
+    return this.viewModel.servicesByName.get(this.selectedServiceId) ?? null;
   }
 
   get flowOverlayOpen(): boolean {
@@ -315,12 +319,12 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
     return formatLastAnalyzed(value) ?? 'Unknown';
   }
 
-  endpointUseCases(endpointId: string): UseCaseReference[] {
-    return this.viewModel ? findUseCasesForEndpoint(this.viewModel, endpointId) : [];
+  endpointUseCases(serviceName: string, endpointName: string): UseCaseReference[] {
+    return this.viewModel ? findUseCasesForEndpoint(this.viewModel, serviceName, endpointName) : [];
   }
 
-  relatedServices(endpointId: string): GraphServiceNode[] {
-    return this.viewModel ? findRelatedServicesForEndpoint(this.viewModel, endpointId) : [];
+  relatedServices(serviceName: string, endpointName: string): GraphServiceNode[] {
+    return this.viewModel ? findRelatedServicesForEndpoint(this.viewModel, serviceName, endpointName) : [];
   }
 
   stepElementId(useCaseId: string, index: number): string {
@@ -335,8 +339,10 @@ export class GraphComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   trackService(_: number, service: GraphServiceNode): string { return service.id; }
-  trackEndpoint(_: number, endpoint: Endpoint): string { return endpoint.id; }
-  trackUseCase(_: number, useCase: UseCase): string { return useCase.id; }
-  trackUseCaseRef(_: number, reference: UseCaseReference): string { return reference.useCase.id; }
+  trackEndpoint(_: number, endpoint: Endpoint): string { return endpoint.name; }
+  trackUseCase(_: number, useCase: UseCase): string { return useCase.name; }
+  trackUseCaseRef(_: number, reference: UseCaseReference): string {
+    return `${reference.service.service.name}\0${reference.useCase.name}`;
+  }
   trackStep(index: number): number { return index; }
 }

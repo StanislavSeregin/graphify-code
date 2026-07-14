@@ -1,4 +1,4 @@
-﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +17,6 @@ public class FullGraph
             {
                 Service = new ServiceModel()
                 {
-                    Id = srv.Id,
                     Name = srv.Name,
                     Description = srv.Description,
                     LastAnalyzedAt = srv.LastAnalyzedAt,
@@ -25,7 +24,6 @@ public class FullGraph
                 },
                 Endpoint = [.. srv.Endpoints?.EndpointList.Select(e => new EndpointModel()
                 {
-                    Id = e.Id,
                     Name = e.Name,
                     Description = e.Description,
                     Type = e.Type,
@@ -34,23 +32,22 @@ public class FullGraph
                 }) ?? []],
                 UseCases = [.. srv.UseCases.Select(u => new UseCaseModel()
                 {
-                    Id = u.Id,
                     Name = u.Name,
                     Description = u.Description,
-                    InitiatingEndpointId = u.InitiatingEndpointId,
+                    InitiatingEndpointName = u.InitiatingEndpointName,
                     LastAnalyzedAt = u.LastAnalyzedAt,
                     Steps = [.. u.Steps.Select(s => new UseCaseStepModel()
                     {
                         Name = s.Name,
                         Description = s.Description,
-                        ServiceId = s.ServiceId,
-                        EndpointId = s.EndpointId,
+                        ServiceName = s.ServiceName,
+                        EndpointName = s.EndpointName,
                         RelativeCodePath = s.RelativeCodePath
                     })]
                 })],
                 Relations = new RelationsModel()
                 {
-                    TargetEndpointIds = []
+                    TargetEndpointNames = []
                 }
             })]
         };
@@ -70,8 +67,6 @@ public class ServiceData
 
 public class ServiceModel
 {
-    public Guid Id { get; set; }
-
     public required string Name { get; set; }
 
     public required string Description { get; set; }
@@ -83,8 +78,6 @@ public class ServiceModel
 
 public class EndpointModel
 {
-    public Guid Id { get; set; }
-
     public required string Name { get; set; }
 
     public required string Description { get; set; }
@@ -98,13 +91,11 @@ public class EndpointModel
 
 public class UseCaseModel
 {
-    public Guid Id { get; set; }
-
     public required string Name { get; set; }
 
     public required string Description { get; set; }
 
-    public Guid InitiatingEndpointId { get; set; }
+    public required string InitiatingEndpointName { get; set; }
 
     public DateTime LastAnalyzedAt { get; set; }
 
@@ -117,14 +108,14 @@ public class UseCaseStepModel
 
     public required string Description { get; set; }
 
-    public Guid? ServiceId { get; set; }
+    public string? ServiceName { get; set; }
 
-    public Guid? EndpointId { get; set; }
+    public string? EndpointName { get; set; }
 
     public string? RelativeCodePath { get; set; }
 }
 
 public class RelationsModel
 {
-    public required Guid[] TargetEndpointIds { get; set; }
+    public required string[] TargetEndpointNames { get; set; }
 }

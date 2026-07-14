@@ -1,4 +1,4 @@
-﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Entities;
 using GraphifyCode.Data.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -28,31 +28,31 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
         base.OnModelCreating(modelBuilder);
         modelBuilder.Entity<Service>(entity =>
         {
-            entity.HasKey(e => e.Id);
-
+            entity.HasKey(e => e.Name);
             entity.Property(e => e.Name).IsRequired();
             entity.Property(e => e.Description).IsRequired();
 
             entity.HasOne(e => e.Endpoints)
                 .WithOne(e => e.Parent)
-                .HasForeignKey<Endpoints>("ServiceId")
+                .HasForeignKey<Endpoints>("ServiceName")
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasMany(e => e.UseCases)
                 .WithOne(e => e.Parent)
-                .HasForeignKey("ServiceId")
+                .HasForeignKey("ServiceName")
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Endpoints>(entity =>
         {
-            entity.HasKey("ServiceId");
+            entity.HasKey("ServiceName");
 
             entity.OwnsMany(e => e.EndpointList, endpoint =>
             {
-                endpoint.Property(e => e.Id);
+                endpoint.WithOwner().HasForeignKey("ServiceName");
+                endpoint.HasKey("ServiceName", nameof(Endpoint.Name));
                 endpoint.Property(e => e.Name).IsRequired();
                 endpoint.Property(e => e.Description).IsRequired();
                 endpoint.Property(e => e.Type).IsRequired();
@@ -61,10 +61,10 @@ public class GraphifyContext(IOptions<MarkdownStorageSettings> settings) : DbCon
 
         modelBuilder.Entity<UseCase>(entity =>
         {
-            entity.HasKey(e => e.Id);
-
+            entity.HasKey("ServiceName", nameof(UseCase.Name));
             entity.Property(e => e.Name).IsRequired();
             entity.Property(e => e.Description).IsRequired();
+            entity.Property(e => e.InitiatingEndpointName).IsRequired();
 
             entity.OwnsMany(e => e.Steps, step =>
             {

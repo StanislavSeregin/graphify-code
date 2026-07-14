@@ -38,16 +38,14 @@ GraphifyCode визуализирует архитектуру системы в
 
 ```typescript
 type Service = {
-  id: string;
-  name: string;
+  name: string; // identity
   description: string;
   lastAnalyzedAt: string;
   relativeCodePath: string | null; // null = внешний сервис
 };
 
 type Endpoint = {
-  id: string;
-  name: string;
+  name: string; // identity within service
   description: string;
   type: 'http' | 'queue' | 'job'; // строго типизированные значения
   lastAnalyzedAt: string;
@@ -55,22 +53,21 @@ type Endpoint = {
 };
 
 type Relations = {
-  targetEndpointIds: string[]; // ID эндпоинтов, в которые данный сервис интегрируется
+  targetEndpointNames: string[]; // имена эндпоинтов, в которые данный сервис интегрируется
 };
 
 type UseCaseStep = {
   name: string;
   description: string;
-  serviceId: string | null;
-  endpointId: string | null;
+  serviceName: string | null;
+  endpointName: string | null;
   relativeCodePath: string | null;
 };
 
 type UseCase = {
-  id: string;
-  name: string;
+  name: string; // identity within service
   description: string;
-  initiatingEndpointId: string; // Эндпоинт, с которого начинается юзкейс
+  initiatingEndpointName: string; // эндпоинт, с которого начинается юзкейс
   lastAnalyzedAt: string;
   steps: UseCaseStep[];
 };
@@ -88,7 +85,7 @@ type FullGraph = {
 ```
 
 ### Интерпретация Relations
-`Relations.targetEndpointIds` содержит ID эндпоинтов из других сервисов, в которые **данный сервис** делает запросы. Это позволяет строить связи **service-to-service** (не endpoint-to-endpoint между разными сервисами).
+`Relations.targetEndpointNames` содержит имена эндпоинтов из других сервисов, в которые **данный сервис** делает запросы. Это позволяет строить связи **service-to-service**.
 
 ---
 
@@ -167,10 +164,10 @@ type FullGraph = {
 - **Название**: Строка текста (заголовок)
 - **Краткая сводка**: "N шагов" (подзаголовок)
 - **Описание**: (только полный режим) Текстовое поле
-- **Визуальная связь**: Линия, соединяющая юзкейс с `initiatingEndpointId`
+- **Визуальная связь**: Линия, соединяющая юзкейс с `initiatingEndpointName`
 
 #### Принадлежность сервису
-Юзкейс принадлежит сервису, в котором находится эндпоинт с ID = `initiatingEndpointId`.
+Юзкейс принадлежит сервису, в котором находится эндпоинт с именем = `initiatingEndpointName`.
 
 #### Интерактивность
 - **Клик**: Открывает **левый сайдбар** с шагами юзкейса
@@ -191,7 +188,7 @@ type FullGraph = {
   - При клике: активация сервиса на графе + перевод фокуса
 - **Блок юзкейсов**:
   - Заголовок: "Юзкейсы"
-  - Список юзкейсов, в которых эндпоинт участвует (по `UseCaseStep.endpointId`)
+  - Список юзкейсов, в которых эндпоинт участвует (по `UseCaseStep.endpointName`)
   - При клике: активация юзкейса на графе + открытие левого сайдбара с активацией шага
 
 #### Закрытие
@@ -233,8 +230,8 @@ type FullGraph = {
 - **Клик**:
   - Раскрывает шаг (схлопывает остальные)
   - Активирует связанный элемент на графе по приоритету:
-    1. Если `endpointId !== null` → навигация к эндпоинту (активация родительского сервиса + подсветка эндпоинта)
-    2. Иначе, если `serviceId !== null` → навигация к сервису
+    1. Если `endpointName !== null` → навигация к эндпоинту (активация родительского сервиса + подсветка эндпоинта)
+    2. Иначе, если `serviceName !== null` → навигация к сервису
     3. Иначе → ничего (шаг без привязки к графу)
   - Переводит фокус камеры на активированный элемент
 
@@ -317,8 +314,8 @@ export class DisplayModeService {
 ### Приоритет навигации для UseCaseStep
 
 При клике на шаг юзкейса:
-1. Если `endpointId !== null` → навигация к эндпоинту
-2. Иначе, если `serviceId !== null` → навигация к сервису
+1. Если `endpointName !== null` → навигация к эндпоинту
+2. Иначе, если `serviceName !== null` → навигация к сервису
 3. Иначе → ничего (шаг без привязки)
 
 **Навигация к эндпоинту** означает:
@@ -340,7 +337,7 @@ export class DisplayModeService {
 
 #### Связи между сервисами
 - **Тип**: Service-to-Service (не endpoint-to-endpoint между разными сервисами)
-- **Источник данных**: `Relations.targetEndpointIds` → определить сервисы, которым принадлежат эти эндпоинты
+- **Источник данных**: `Relations.targetEndpointNames` → определить сервисы, которым принадлежат эти эндпоинты
 - **Визуализация**: Линии (можно использовать d3.linkHorizontal или кастомные кривые)
 - **Стиль**: Без направления (стрелок), всегда видимые
 
@@ -364,7 +361,7 @@ export class DisplayModeService {
 **Не использовать** список или грид без связей — это противоречит требованию визуализации связей.
 
 #### Визуальная связь юзкейса с эндпоинтом
-Линия соединяет юзкейс с эндпоинтом, ID которого равен `UseCase.initiatingEndpointId`.
+Линия соединяет юзкейс с эндпоинтом, имя которого равно `UseCase.initiatingEndpointName`.
 
 ### Внешние сервисы
 
@@ -413,7 +410,7 @@ private onZoomChanged(transform: ZoomTransform): void {
 interface FocusState {
   type: 'none' | 'service' | 'endpoint';
   targetId: string | null;
-  serviceId?: string; // Для endpoint - ID родительского сервиса
+  serviceName?: string; // For endpoint — owning service name
 }
 
 // Применение фокуса
@@ -434,14 +431,14 @@ private applyFocusState(state: FocusState): void {
   if (state.type === 'endpoint') {
     // Активация родительского сервиса
     this.serviceGroups
-      .filter((d: any) => d.id === state.serviceId)
+      .filter((d: any) => d.id === state.serviceName)
       .attr('opacity', 1.0);
 
     // Подсветка эндпоинта (дополнительная стилизация)
     this.highlightEndpoint(state.targetId);
 
     // Центрирование камеры
-    this.centerCameraOnService(state.serviceId);
+    this.centerCameraOnService(state.serviceName);
   }
 }
 ```

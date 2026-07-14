@@ -1,4 +1,4 @@
-﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Entities;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,12 +24,12 @@ internal static class EntityDriver
             if (filePath is { } fp
                 && Path.GetDirectoryName(fp) is { } dirPath
                 && Path.GetFileName(dirPath) is { } dn
-                && Guid.TryParse(dn, out var entityId)
+                && PathIdentity.IsValidSegment(dn)
                 && File.Exists(fp)
                 && await File.ReadAllTextAsync(fp, ct) is { } md
-                && Service.FromMarkdown(md) is { } entity)
+                && Service.FromMarkdown(md) is { } entity
+                && PathIdentity.NamesEqual(entity.Name, dn))
             {
-                entity.Id = entityId;
                 await foreach (var endpoints in Load<Endpoints>(path, ct))
                 {
                     if (endpoints is not null)
@@ -51,12 +51,14 @@ internal static class EntityDriver
 
                 return entity;
             }
-            else
-            {
-                return null;
-            }
+
+            return null;
         },
-        FilePathResolver: (pathContext, entity) => Path.Combine(pathContext, entity.Id.ToString(), "service.md"),
+        FilePathResolver: (pathContext, entity) =>
+        {
+            PathIdentity.EnsureValidSegment(entity.Name, nameof(entity.Name));
+            return Path.Combine(pathContext, entity.Name, "service.md");
+        },
         Writer: async (filePath, entity, ct) =>
         {
             if (Path.GetDirectoryName(filePath) is { } directoryPath)
@@ -93,7 +95,11 @@ internal static class EntityDriver
                 && Endpoints.FromMarkdown(md) is { } entity
             ? entity
             : null,
-        FilePathResolver: (pathContext, entity) => Path.Combine(pathContext, entity.Parent.Id.ToString(), "endpoints.md"),
+        FilePathResolver: (pathContext, entity) =>
+        {
+            PathIdentity.EnsureValidSegment(entity.Parent.Name, nameof(entity.Parent.Name));
+            return Path.Combine(pathContext, entity.Parent.Name, "endpoints.md");
+        },
         Writer: async (filePath, entity, ct) =>
         {
             if (Path.GetDirectoryName(filePath) is { } directoryPath)
@@ -128,20 +134,23 @@ internal static class EntityDriver
         {
             if (filePath is { } fp
                 && Path.GetFileNameWithoutExtension(fp) is { } fn
-                && Guid.TryParse(fn, out var id)
+                && PathIdentity.IsValidSegment(fn)
                 && File.Exists(fp)
                 && await File.ReadAllTextAsync(fp, ct) is { } md
-                && UseCase.FromMarkdown(md) is { } entity)
+                && UseCase.FromMarkdown(md) is { } entity
+                && PathIdentity.NamesEqual(entity.Name, fn))
             {
-                entity.Id = id;
                 return entity;
             }
-            else
-            {
-                return null;
-            }
+
+            return null;
         },
-        FilePathResolver: (pathContext, entity) => Path.Combine(pathContext, entity.Parent.Id.ToString(), "usecases", $"{entity.Id}.md"),
+        FilePathResolver: (pathContext, entity) =>
+        {
+            PathIdentity.EnsureValidSegment(entity.Parent.Name, nameof(entity.Parent.Name));
+            PathIdentity.EnsureValidSegment(entity.Name, nameof(entity.Name));
+            return Path.Combine(pathContext, entity.Parent.Name, "usecases", $"{entity.Name}.md");
+        },
         Writer: async (filePath, entity, ct) =>
         {
             if (Path.GetDirectoryName(filePath) is { } directoryPath)

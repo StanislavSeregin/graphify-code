@@ -10,11 +10,11 @@ public class SerializeDeserializeTests
 {
     private static readonly Service ServiceData = new()
     {
-        Id = Guid.Empty,
         Name = "UserService",
         Description = "Handles user authentication and management",
         LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
-        RelativeCodePath = "src/services/UserService.cs"
+        RelativeCodePath = "src/services/UserService.cs",
+        UseCases = []
     };
 
     private static readonly string ServiceMarkdown = """
@@ -41,19 +41,19 @@ public class SerializeDeserializeTests
         var obj = Service.FromMarkdown(ServiceMarkdown);
 
         // Assert
-        obj.Should().BeEquivalentTo(ServiceData);
+        obj.Should().BeEquivalentTo(ServiceData, opts => opts.Excluding(s => s.UseCases).Excluding(s => s.Endpoints));
     }
 
     private static readonly Service ServiceDataWithMultiline = new()
     {
-        Id = Guid.Empty,
         Name = "UserService",
         Description = """
         Handles user authentication and management.
         And some else...
         """.ReplaceLineEndings("\n"),
         LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
-        RelativeCodePath = "src/services/UserService.cs"
+        RelativeCodePath = "src/services/UserService.cs",
+        UseCases = []
     };
 
     private static readonly string ServiceMarkdownWithMultiline = """
@@ -81,7 +81,7 @@ public class SerializeDeserializeTests
         var obj = Service.FromMarkdown(ServiceMarkdownWithMultiline);
 
         // Assert
-        obj.Should().BeEquivalentTo(ServiceDataWithMultiline);
+        obj.Should().BeEquivalentTo(ServiceDataWithMultiline, opts => opts.Excluding(s => s.UseCases).Excluding(s => s.Endpoints));
     }
 
     private static readonly Endpoints EndpointsData = new()
@@ -90,7 +90,6 @@ public class SerializeDeserializeTests
         [
             new Endpoint
             {
-                Id = Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e"),
                 Name = "GetUser",
                 Description = "Retrieves user by ID",
                 Type = "http",
@@ -99,28 +98,26 @@ public class SerializeDeserializeTests
             },
             new Endpoint
             {
-                Id = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
                 Name = "CreateUser",
                 Description = "Creates a new user",
                 Type = "http",
                 LastAnalyzedAt = new DateTime(2024, 10, 15, 16, 0, 0),
                 RelativeCodePath = "src/controllers/UserController.cs"
             }
-        ]
+        ],
+        Parent = null!
     };
 
     private static readonly string EndpointsMarkdown = """
         # Endpoints
 
         ## GetUser
-        - Id: c97aa83a-8947-49d9-b1a3-d61bc47e361e
         - Description: Retrieves user by ID
         - Type: http
         - LastAnalyzedAt: 15.10.2024 15:00:00
         - RelativeCodePath: src/controllers/UserController.cs
 
         ## CreateUser
-        - Id: 89b71ddd-553a-4861-9383-f9ce24494c3e
         - Description: Creates a new user
         - Type: http
         - LastAnalyzedAt: 15.10.2024 16:00:00
@@ -144,15 +141,14 @@ public class SerializeDeserializeTests
         var obj = Endpoints.FromMarkdown(EndpointsMarkdown);
 
         // Assert
-        obj.Should().BeEquivalentTo(EndpointsData);
+        obj.Should().BeEquivalentTo(EndpointsData, opts => opts.Excluding(e => e.Parent));
     }
 
     private static readonly UseCase UseCaseData = new()
     {
-        Id = Guid.Empty,
         Name = "User Registration",
         Description = "Complete user registration flow",
-        InitiatingEndpointId = Guid.Parse("c97aa83a-8947-49d9-b1a3-d61bc47e361e"),
+        InitiatingEndpointName = "GetUser",
         LastAnalyzedAt = new DateTime(2024, 10, 15, 14, 30, 0),
         Steps =
         [
@@ -160,35 +156,36 @@ public class SerializeDeserializeTests
             {
                 Name = "Validate Input",
                 Description = "Validate user input data",
-                ServiceId = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
-                EndpointId = null,
+                ServiceName = "UserService",
+                EndpointName = null,
                 RelativeCodePath = "src/validators/UserValidator.cs"
             },
             new UseCaseStep
             {
                 Name = "Create User",
                 Description = "Create user in database",
-                ServiceId = null,
-                EndpointId = Guid.Parse("89b71ddd-553a-4861-9383-f9ce24494c3e"),
+                ServiceName = null,
+                EndpointName = "CreateUser",
                 RelativeCodePath = null
             }
-        ]
+        ],
+        Parent = null!
     };
 
     private static readonly string UseCaseMarkdown = """
         # User Registration
         - Description: Complete user registration flow
-        - InitiatingEndpointId: c97aa83a-8947-49d9-b1a3-d61bc47e361e
+        - InitiatingEndpointName: GetUser
         - LastAnalyzedAt: 15.10.2024 14:30:00
 
         ## Validate Input
         - Description: Validate user input data
-        - ServiceId: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - ServiceName: UserService
         - RelativeCodePath: src/validators/UserValidator.cs
 
         ## Create User
         - Description: Create user in database
-        - EndpointId: 89b71ddd-553a-4861-9383-f9ce24494c3e
+        - EndpointName: CreateUser
         """.ReplaceLineEndings("\n");
 
     [Test]
@@ -208,6 +205,6 @@ public class SerializeDeserializeTests
         var obj = UseCase.FromMarkdown(UseCaseMarkdown);
 
         // Assert
-        obj.Should().BeEquivalentTo(UseCaseData);
+        obj.Should().BeEquivalentTo(UseCaseData, opts => opts.Excluding(u => u.Parent));
     }
 }

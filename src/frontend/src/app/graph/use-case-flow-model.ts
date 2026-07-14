@@ -1,4 +1,4 @@
-import { ServiceData, UseCase, UseCaseStep } from './graph.service';
+import { ServiceData, UseCase, UseCaseStep, endpointRefKey } from './graph.service';
 import { GraphViewModel } from './graph-view-model';
 
 const UNASSIGNED_ENDPOINT_KEY = '__unassigned__';
@@ -53,7 +53,7 @@ export function buildUseCaseFlowModel(
     const existing = serviceGroups.get(serviceId);
     if (existing) return existing;
 
-    const service = vm.servicesById.get(serviceId);
+    const service = vm.servicesByName.get(serviceId);
     const group: FlowServiceGroup = {
       serviceId,
       serviceName: service?.serviceData.service.name ?? serviceId,
@@ -85,17 +85,22 @@ export function buildUseCaseFlowModel(
   };
 
   useCase.steps.forEach((step, index) => {
-    const endpointRef = step.endpointId ? vm.endpointsById.get(step.endpointId) : null;
-    const serviceId = endpointRef?.service.service.id ?? step.serviceId ?? owningService.service.id;
+    const endpointServiceName = step.endpointName
+      ? (step.serviceName ?? owningService.service.name)
+      : null;
+    const endpointRef = step.endpointName && endpointServiceName
+      ? vm.endpointsByKey.get(endpointRefKey(endpointServiceName, step.endpointName))
+      : null;
+    const serviceId = endpointRef?.service.service.name ?? step.serviceName ?? owningService.service.name;
     const inheritedEndpoint = latestEndpointContextByService.get(serviceId);
-    const endpointKey = endpointRef?.endpoint.id ?? inheritedEndpoint?.endpointKey ?? UNASSIGNED_ENDPOINT_KEY;
+    const endpointKey = endpointRef?.endpoint.name ?? inheritedEndpoint?.endpointKey ?? UNASSIGNED_ENDPOINT_KEY;
     const endpointLabel = endpointRef?.endpoint.name ?? inheritedEndpoint?.endpointLabel ?? SERVICE_LEVEL_LABEL;
     const serviceGroup = ensureServiceGroup(serviceId);
     const endpointGroup = ensureEndpointGroup(serviceGroup, endpointKey, endpointLabel);
 
     if (endpointRef) {
       latestEndpointContextByService.set(serviceId, {
-        endpointKey: endpointRef.endpoint.id,
+        endpointKey: endpointRef.endpoint.name,
         endpointLabel: endpointRef.endpoint.name
       });
     }
@@ -111,9 +116,9 @@ export function buildUseCaseFlowModel(
   });
 
   return {
-    useCaseId: useCase.id,
+    useCaseId: useCase.name,
     useCaseName: useCase.name,
-    owningServiceId: owningService.service.id,
+    owningServiceId: owningService.service.name,
     services: [...serviceGroups.values()],
     sequenceEdges: useCase.steps.slice(1).map((_, index) => ({
       fromIndex: index,

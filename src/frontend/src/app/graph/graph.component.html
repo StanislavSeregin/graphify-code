@@ -105,12 +105,12 @@
           <h3>Endpoints</h3>
           @if (service.serviceData.endpoint.length > 0) {
             <mat-accordion class="entity-accordion">
-              @for (endpoint of service.serviceData.endpoint; track endpoint.id) {
+              @for (endpoint of service.serviceData.endpoint; track endpoint.name) {
                 <mat-expansion-panel
-                  [expanded]="expandedEndpointId === endpoint.id"
-                  [class.active]="expandedEndpointId === endpoint.id"
-                  (opened)="expandedEndpointId = endpoint.id"
-                  (closed)="expandedEndpointId === endpoint.id && (expandedEndpointId = null)">
+                  [expanded]="expandedEndpointId === endpoint.name"
+                  [class.active]="expandedEndpointId === endpoint.name"
+                  (opened)="expandedEndpointId = endpoint.name"
+                  (closed)="expandedEndpointId === endpoint.name && (expandedEndpointId = null)">
                   <mat-expansion-panel-header>
                     <mat-panel-title>
                       <mat-icon>{{ endpoint.type === 'job' ? 'schedule' : endpoint.type === 'queue' ? 'mail' : 'http' }}</mat-icon>
@@ -138,10 +138,10 @@
 
                     <div class="inline-section">
                       <h4>Related use cases</h4>
-                      @if (endpointUseCases(endpoint.id).length > 0) {
+                      @if (endpointUseCases(service.serviceData.service.name, endpoint.name).length > 0) {
                         <div class="entity-list">
-                          @for (reference of endpointUseCases(endpoint.id); track reference.useCase.id) {
-                            <button type="button" class="entity-row" (click)="expandUseCase(reference.useCase.id)">
+                          @for (reference of endpointUseCases(service.serviceData.service.name, endpoint.name); track trackUseCaseRef($index, reference)) {
+                            <button type="button" class="entity-row" (click)="expandUseCase(reference.service.service.name, reference.useCase.name)">
                               <mat-icon>playlist_play</mat-icon>
                               <span>{{ reference.useCase.name }}</span>
                               <small>{{ reference.service.service.name }}</small>
@@ -155,9 +155,9 @@
 
                     <div class="inline-section">
                       <h4>Calling services</h4>
-                      @if (relatedServices(endpoint.id).length > 0) {
+                      @if (relatedServices(service.serviceData.service.name, endpoint.name).length > 0) {
                         <div class="entity-list">
-                          @for (related of relatedServices(endpoint.id); track related.id) {
+                          @for (related of relatedServices(service.serviceData.service.name, endpoint.name); track related.id) {
                             <button type="button" class="entity-row" (click)="selectService(related.id, true)">
                               <mat-icon>{{ related.isExternal ? 'link' : 'apps' }}</mat-icon>
                               <span>{{ related.serviceData.service.name }}</span>
@@ -181,12 +181,12 @@
           <h3>Use cases</h3>
           @if (service.serviceData.useCases.length > 0) {
             <mat-accordion class="entity-accordion">
-              @for (useCase of service.serviceData.useCases; track useCase.id) {
+              @for (useCase of service.serviceData.useCases; track useCase.name) {
                 <mat-expansion-panel
-                  [expanded]="expandedUseCaseId === useCase.id"
-                  [class.active]="expandedUseCaseId === useCase.id"
+                  [expanded]="expandedUseCaseId === useCase.name"
+                  [class.active]="expandedUseCaseId === useCase.name"
                   (opened)="onUseCaseOpened(useCase)"
-                  (closed)="expandedUseCaseId === useCase.id && (expandedUseCaseId = null)">
+                  (closed)="expandedUseCaseId === useCase.name && (expandedUseCaseId = null)">
                   <mat-expansion-panel-header>
                     <mat-panel-title>
                       <mat-icon>account_tree</mat-icon>
@@ -213,10 +213,10 @@
                       <div class="timeline">
                         @for (step of useCase.steps; track $index) {
                           <button
-                            [id]="stepElementId(useCase.id, $index)"
+                            [id]="stepElementId(useCase.name, $index)"
                             type="button"
                             class="timeline-step"
-                            [class.active]="activeFlowModel?.useCaseId === useCase.id && activeFlowStepIndex === $index"
+                            [class.active]="activeFlowModel?.useCaseId === useCase.name && activeFlowStepIndex === $index"
                             (click)="openFlowOverlay(useCase, $index)">
                             <span class="step-index">{{ $index + 1 }}</span>
                             <span>

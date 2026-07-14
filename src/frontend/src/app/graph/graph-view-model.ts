@@ -1,4 +1,12 @@
-import { Endpoint, FullGraph, ServiceData, UseCase, UseCaseStep } from './graph.service';
+import {
+  Endpoint,
+  FullGraph,
+  ServiceData,
+  UseCase,
+  UseCaseStep,
+  endpointRefKey,
+  useCaseRefKey
+} from './graph.service';
 
 export interface GraphServiceNode {
   id: string;
@@ -35,41 +43,43 @@ export interface StepReference {
 export interface GraphViewModel {
   services: GraphServiceNode[];
   edges: GraphDependencyEdge[];
-  servicesById: Map<string, GraphServiceNode>;
-  endpointToServiceId: Map<string, string>;
-  endpointsById: Map<string, EndpointReference>;
-  useCasesById: Map<string, UseCaseReference>;
+  servicesByName: Map<string, GraphServiceNode>;
+  endpointToServiceName: Map<string, string>;
+  endpointsByKey: Map<string, EndpointReference>;
+  useCasesByKey: Map<string, UseCaseReference>;
 }
 
 export function buildGraphViewModel(graph: FullGraph): GraphViewModel {
   const services = graph.services.map(serviceData => ({
-    id: serviceData.service.id,
+    id: serviceData.service.name,
     serviceData,
     endpointCount: serviceData.endpoint.length,
     useCaseCount: serviceData.useCases.length,
     isExternal: serviceData.service.relativeCodePath === null
   }));
 
-  const servicesById = new Map(services.map(service => [service.id, service]));
-  const endpointToServiceId = new Map<string, string>();
-  const endpointsById = new Map<string, EndpointReference>();
-  const useCasesById = new Map<string, UseCaseReference>();
+  const servicesByName = new Map(services.map(service => [service.id, service]));
+  const endpointToServiceName = new Map<string, string>();
+  const endpointsByKey = new Map<string, EndpointReference>();
+  const useCasesByKey = new Map<string, UseCaseReference>();
 
   graph.services.forEach(serviceData => {
+    const serviceName = serviceData.service.name;
     serviceData.endpoint.forEach(endpoint => {
-      endpointToServiceId.set(endpoint.id, serviceData.service.id);
-      endpointsById.set(endpoint.id, { endpoint, service: serviceData });
+      const key = endpointRefKey(serviceName, endpoint.name);
+      endpointToServiceName.set(key, serviceName);
+      endpointsByKey.set(key, { endpoint, service: serviceData });
     });
 
     serviceData.useCases.forEach(useCase => {
-      useCasesById.set(useCase.id, { useCase, service: serviceData });
+      useCasesByKey.set(useCaseRefKey(serviceName, useCase.name), { useCase, service: serviceData });
     });
   });
 
   const edgeCounts = new Map<string, GraphDependencyEdge>();
   const addEdge = (sourceId: string, targetId: string) => {
     if (sourceId === targetId) return;
-    if (!servicesById.has(sourceId) || !servicesById.has(targetId)) return;
+    if (!servicesByName.has(sourceId) || !servicesByName.has(targetId)) return;
 
     const id = `${sourceId}->${targetId}`;
     const existing = edgeCounts.get(id);
@@ -82,27 +92,31 @@ export function buildGraphViewModel(graph: FullGraph): GraphViewModel {
   };
 
   graph.services.forEach(serviceData => {
-    const sourceId = serviceData.service.id;
+    const sourceId = serviceData.service.name;
 
-    serviceData.relations.targetEndpointIds.forEach(endpointId => {
-      const targetServiceId = endpointToServiceId.get(endpointId);
-      if (targetServiceId) {
-        addEdge(sourceId, targetServiceId);
+    serviceData.relations.targetEndpointNames.forEach(endpointName => {
+      for (const [key, targetServiceName] of endpointToServiceName) {
+        if (key.endsWith(`\0${endpointName}`)) {
+          addEdge(sourceId, targetServiceName);
+        }
       }
     });
 
     serviceData.useCases.forEach(useCase => {
       useCase.steps.forEach(step => {
-        if (step.endpointId) {
-          const targetServiceId = endpointToServiceId.get(step.endpointId);
-          if (targetServiceId) {
-            addEdge(sourceId, targetServiceId);
+        if (step.endpointName) {
+          const endpointServiceName = step.serviceName ?? sourceId;
+          const targetServiceName = endpointToServiceName.get(
+            endpointRefKey(endpointServiceName, step.endpointName)
+          );
+          if (targetServiceName) {
+            addEdge(sourceId, targetServiceName);
           }
           return;
         }
 
-        if (step.serviceId) {
-          addEdge(sourceId, step.serviceId);
+        if (step.serviceName) {
+          addEdge(sourceId, step.serviceName);
         }
       });
     });
@@ -111,21 +125,32 @@ export function buildGraphViewModel(graph: FullGraph): GraphViewModel {
   return {
     services,
     edges: [...edgeCounts.values()],
-    servicesById,
-    endpointToServiceId,
-    endpointsById,
-    useCasesById
+    servicesByName,
+    endpointToServiceName,
+    endpointsByKey,
+    useCasesByKey
   };
 }
 
-export function findUseCasesForEndpoint(vm: GraphViewModel, endpointId: string): UseCaseReference[] {
+export function findUseCasesForEndpoint(
+  vm: GraphViewModel,
+  serviceName: string,
+  endpointName: string
+): UseCaseReference[] {
   const references: UseCaseReference[] = [];
 
-  vm.useCasesById.forEach(reference => {
-    if (
-      reference.useCase.initiatingEndpointId === endpointId ||
-      reference.useCase.steps.some(step => step.endpointId === endpointId)
-    ) {
+  vm.useCasesByKey.forEach(reference => {
+    const { useCase, service } = reference;
+    const matchesInitiating =
+      service.service.name === serviceName
+      && useCase.initiatingEndpointName === endpointName;
+    const matchesStep = useCase.steps.some(step =>
+      step.endpointName === endpointName
+      && (step.serviceName === null
+        ? service.service.name === serviceName
+        : step.serviceName === serviceName));
+
+    if (matchesInitiating || matchesStep) {
       references.push(reference);
     }
   });
@@ -133,24 +158,32 @@ export function findUseCasesForEndpoint(vm: GraphViewModel, endpointId: string):
   return references;
 }
 
-export function findRelatedServicesForEndpoint(vm: GraphViewModel, endpointId: string): GraphServiceNode[] {
-  const relatedServiceIds = new Set<string>();
+export function findRelatedServicesForEndpoint(
+  vm: GraphViewModel,
+  serviceName: string,
+  endpointName: string
+): GraphServiceNode[] {
+  const relatedServiceNames = new Set<string>();
 
   vm.services.forEach(service => {
     const { serviceData } = service;
-    if (serviceData.relations.targetEndpointIds.includes(endpointId)) {
-      relatedServiceIds.add(service.id);
+    if (serviceData.relations.targetEndpointNames.includes(endpointName)) {
+      relatedServiceNames.add(service.id);
     }
 
     for (const useCase of serviceData.useCases) {
-      if (useCase.steps.some(step => step.endpointId === endpointId)) {
-        relatedServiceIds.add(service.id);
+      if (useCase.steps.some(step =>
+        step.endpointName === endpointName
+        && (step.serviceName === null
+          ? serviceData.service.name === serviceName
+          : step.serviceName === serviceName))) {
+        relatedServiceNames.add(service.id);
         break;
       }
     }
   });
 
-  return [...relatedServiceIds]
-    .map(serviceId => vm.servicesById.get(serviceId))
+  return [...relatedServiceNames]
+    .map(name => vm.servicesByName.get(name))
     .filter((service): service is GraphServiceNode => Boolean(service));
 }

@@ -1,4 +1,4 @@
-﻿using GraphifyCode.Data.Entities;
+using GraphifyCode.Data.Entities;
 using GraphifyCode.Markdown;
 using System;
 using System.Collections.Generic;
@@ -17,12 +17,10 @@ public partial class ServicesDetails
         {
             Services = [.. services.Select(srv => new DetailedService()
             {
-                Id = srv.Id,
                 Name = srv.Name,
                 Endpoints = withEndpoints && srv.Endpoints?.EndpointList is { } endpoints
                     ? [.. endpoints.Select(e => new DetailedServiceEndpoint()
                         {
-                            Id = e.Id,
                             Name = e.Name,
                             Description = e.Description,
                             Type = e.Type,
@@ -31,12 +29,11 @@ public partial class ServicesDetails
                         })]
                     : [],
                 UseCases = withUseCases && srv.UseCases is { } useCases
-                    ? [.. useCases.Select(u => new DetailedServiceUseCase()
+                    ? [.. useCases.Select(u => new DetailedUseCaseOverview()
                         {
-                            Id = u.Id,
                             Name = u.Name,
                             Description = u.Description,
-                            InitiatingEndpointId = u.InitiatingEndpointId,
+                            InitiatingEndpointName = u.InitiatingEndpointName,
                             LastAnalyzedAt = u.LastAnalyzedAt
                         })]
                     : []
@@ -48,8 +45,6 @@ public partial class ServicesDetails
 [MarkdownSerializable]
 public partial class DetailedService
 {
-    public Guid Id { get; set; }
-
     [MarkdownHeader]
     public required string Name { get; set; }
 
@@ -57,14 +52,12 @@ public partial class DetailedService
     public required DetailedServiceEndpoint[] Endpoints { get; set; }
 
     [MarkdownSubHeader("Use cases")]
-    public required DetailedServiceUseCase[] UseCases { get; set; }
+    public required DetailedUseCaseOverview[] UseCases { get; set; }
 }
 
 [MarkdownSerializable]
 public partial class DetailedServiceEndpoint
 {
-    public Guid Id { get; set; }
-
     [MarkdownHeader]
     public required string Name { get; set; }
 
@@ -78,16 +71,14 @@ public partial class DetailedServiceEndpoint
 }
 
 [MarkdownSerializable]
-public partial class DetailedServiceUseCase
+public partial class DetailedUseCaseOverview
 {
-    public Guid Id { get; set; }
-
     [MarkdownHeader]
     public required string Name { get; set; }
 
     public required string Description { get; set; }
 
-    public Guid InitiatingEndpointId { get; set; }
+    public required string InitiatingEndpointName { get; set; }
 
     public DateTime LastAnalyzedAt { get; set; }
 }

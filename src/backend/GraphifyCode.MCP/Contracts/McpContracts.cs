@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace GraphifyCode.MCP.Contracts;
 
@@ -87,19 +86,15 @@ public sealed class SearchMatch
 {
     public required GraphEntityType EntityType { get; init; }
 
-    public required Guid EntityId { get; init; }
+    public required string EntityName { get; init; }
 
-    public required string Name { get; init; }
-
-    public required Guid ServiceId { get; init; }
+    public required string ServiceName { get; init; }
 
     public string? RelativeCodePath { get; init; }
 }
 
 public sealed class UpsertServiceRequest
 {
-    public Guid? ServiceId { get; init; }
-
     public required string Name { get; init; }
 
     public required string Description { get; init; }
@@ -109,9 +104,7 @@ public sealed class UpsertServiceRequest
 
 public sealed class UpsertEndpointRequest
 {
-    public Guid ServiceId { get; init; }
-
-    public Guid? EndpointId { get; init; }
+    public required string ServiceName { get; init; }
 
     public required string Name { get; init; }
 
@@ -124,28 +117,28 @@ public sealed class UpsertEndpointRequest
 
 public sealed class UpsertUseCaseRequest
 {
-    public Guid ServiceId { get; init; }
-
-    public Guid? UseCaseId { get; init; }
+    public required string ServiceName { get; init; }
 
     public required string Name { get; init; }
 
     public required string Description { get; init; }
 
-    public Guid InitiatingEndpointId { get; init; }
+    public required string InitiatingEndpointName { get; init; }
 }
 
 public sealed class UpsertRelationRequest
 {
-    public Guid UseCaseId { get; init; }
+    public required string ServiceName { get; init; }
+
+    public required string UseCaseName { get; init; }
 
     public required string StepName { get; init; }
 
     public required string StepDescription { get; init; }
 
-    public Guid? ServiceId { get; init; }
+    public string? RelatedServiceName { get; init; }
 
-    public Guid? EndpointId { get; init; }
+    public string? EndpointName { get; init; }
 
     public string? RelativeCodePath { get; init; }
 }
@@ -154,7 +147,9 @@ public sealed class MutationResultData
 {
     public required GraphEntityType EntityType { get; init; }
 
-    public required Guid EntityId { get; init; }
+    public required string EntityName { get; init; }
+
+    public string? ServiceName { get; init; }
 
     public required string Action { get; init; }
 
@@ -174,16 +169,27 @@ public sealed class NotFoundErrorDetails : ErrorDetails
 {
     public required GraphEntityType EntityType { get; init; }
 
-    public required Guid EntityId { get; init; }
+    public required string EntityName { get; init; }
+
+    public string? ServiceName { get; init; }
+}
+
+public sealed class UseCaseRef
+{
+    public required string ServiceName { get; init; }
+
+    public required string UseCaseName { get; init; }
 }
 
 public sealed class ConflictErrorDetails : ErrorDetails
 {
     public required GraphEntityType EntityType { get; init; }
 
-    public required Guid EntityId { get; init; }
+    public required string EntityName { get; init; }
 
-    public required Guid[] BlockingUseCaseIds { get; init; }
+    public string? ServiceName { get; init; }
+
+    public required UseCaseRef[] BlockingUseCases { get; init; }
 }
 
 public sealed class BatchErrorDetails : ErrorDetails
@@ -195,8 +201,6 @@ public sealed class BatchErrorDetails : ErrorDetails
 
 public sealed class ListEndpointsData
 {
-    public required Guid ServiceId { get; init; }
-
     public required string ServiceName { get; init; }
 
     public required EndpointSummary[] Endpoints { get; init; }
@@ -204,8 +208,6 @@ public sealed class ListEndpointsData
 
 public sealed class EndpointSummary
 {
-    public required Guid EndpointId { get; init; }
-
     public required string Name { get; init; }
 
     public required string Description { get; init; }
@@ -217,8 +219,6 @@ public sealed class EndpointSummary
 
 public sealed class ListUseCasesData
 {
-    public required Guid ServiceId { get; init; }
-
     public required string ServiceName { get; init; }
 
     public required UseCaseSummary[] UseCases { get; init; }
@@ -226,13 +226,11 @@ public sealed class ListUseCasesData
 
 public sealed class UseCaseSummary
 {
-    public required Guid UseCaseId { get; init; }
-
     public required string Name { get; init; }
 
     public required string Description { get; init; }
 
-    public required Guid InitiatingEndpointId { get; init; }
+    public required string InitiatingEndpointName { get; init; }
 }
 
 public sealed class BulkUpsertEndpointsRequest
