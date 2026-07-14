@@ -26,7 +26,10 @@ public class Program
             .AddMediator()
             .AddGraphifyContext(builder.Configuration)
             .AddMcpServer()
-            .WithHttpTransport()
+            .WithHttpTransport(options =>
+            {
+                options.Stateless = true;
+            })
             .WithToolsFromAssembly();
 
         var app = builder.Build();
